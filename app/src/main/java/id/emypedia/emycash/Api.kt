@@ -54,6 +54,18 @@ object Api {
         }
     }
 
+    // Unduh berkas biner (gambar QR). null kalau gagal.
+    fun bytes(url: String): ByteArray? {
+        return try {
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 8000
+            c.readTimeout = 12000
+            val data = if (c.responseCode in 200..299) c.inputStream.use { it.readBytes() } else null
+            c.disconnect()
+            data
+        } catch (e: Exception) { null }
+    }
+
     // Pesan dari server ({"error":{"message":...}}) atau penjelasan umum per kode HTTP
     fun message(r: Res): String {
         if (r.code == 0) return "Server tidak terjangkau (${r.err}). Cek alamat server dan koneksi internet."
