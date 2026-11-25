@@ -31,3 +31,11 @@ Catatan: perubahan ini ditulis tanpa compiler lokal; bila build gagal, kirim log
 - Workflow membangun dua APK: `EmyCash.apk` (rilis `latest`) dan `EmyCash-Dev.apk` (hanya artifact, jangan dibagikan publik).
 - Naikkan versi: `versionCode 3`, `versionName 1.2`. Unggah APK user ke server dengan angka sama: `bash deploy/unggah-apk.sh EmyCash.apk https://pay.emypedia.my.id 1.2 3`.
 - Catatan: kode Kotlin baru ditulis tanpa compiler lokal. Kalau build gagal, kirim log error dari GitHub Actions.
+
+
+## v1.3: Emy Cash Dev
+- Panel Dev dapat mengambil daftar payment request terbaru dari gateway.
+- Selama Emy Cash Dev terbuka, aplikasi memeriksa event secara berkala dan menampilkan notifikasi Android untuk payment request baru.
+- Tombol **Generate / recreate Secret** membuat Secret pemilik baru, menyimpannya otomatis pada perangkat ini, dan menampilkan plaintext satu kali untuk dicadangkan.
+- Notifikasi saat aplikasi tertutup dikirim melalui konfigurasi Telegram server-side; polling aplikasi sendiri hanya aktif saat aplikasi terbuka.
+- Versi Android: `versionCode 4`, `versionName 1.3`.
