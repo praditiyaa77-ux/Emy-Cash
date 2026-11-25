@@ -43,7 +43,7 @@ object Cfg {
         val base = Api.base(p.getString("wh", "") ?: "") ?: return
         val key = p.getString("sec", "") ?: ""
         if (key.isBlank()) return
-        val ver = try { c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+        val ver = try { c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         val body = JSONObject().put("listener", NotifService.connected).put("version", ver)
         Thread { Api.call("POST", "$base/app/heartbeat", key, body) }.start()
     }
@@ -65,7 +65,7 @@ object Cfg {
             pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
             pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
             if (Build.VERSION.SDK_INT >= 24) NotificationListenerService.requestRebind(cn)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     // Alamat webhook: kalau pengguna hanya mengisi alamat server, tambahkan /notif
@@ -140,7 +140,7 @@ fun methodName(m: String?): String = when (m) {
     else -> "Pembayaran"
 }
 
-fun rupiah(n: Long) = "Rp " + String.format("%,d", n).replace(',', '.')
+fun rupiah(n: Long) = "Rp " + String.format(Locale.US, "%,d", n).replace(',', '.')
 
 // Hanya notifikasi PEMBAYARAN MASUK. Notif "kamu barusan bayar" (keluar) diabaikan.
 fun parseAmount(title: String, text: String): Long? {
@@ -179,7 +179,7 @@ class NotifService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connected = false
         if (Build.VERSION.SDK_INT >= 24) {
-            try { NotificationListenerService.requestRebind(ComponentName(this, NotifService::class.java)) } catch (_: Exception) {}
+            try { NotificationListenerService.requestRebind(ComponentName(this, NotifService::class.java)) } catch (e: Exception) {}
         }
     }
 
@@ -273,7 +273,7 @@ class NotifService : NotificationListenerService() {
                     if (code in 200..299) {
                         val resp = c.inputStream.bufferedReader().use { it.readText() }
                         c.disconnect()
-                        val j = try { JSONObject(resp) } catch (_: Exception) { JSONObject() }
+                        val j = try { JSONObject(resp) } catch (e: Exception) { JSONObject() }
                         if (j.optBoolean("matched")) {
                             status = "paid"; inv = j.optString("invoice"); info = ""
                         } else {
@@ -292,7 +292,7 @@ class NotifService : NotificationListenerService() {
                 } catch (e: Exception) {
                     info = "Server tidak terjangkau (${e.javaClass.simpleName})"
                 }
-                try { Thread.sleep(3000L * i) } catch (_: Exception) {}
+                try { Thread.sleep(3000L * i) } catch (e: Exception) {}
             }
             Cfg.updateEntry(ctx, id, status, inv, info)
             val name = methodName(method)
@@ -323,7 +323,7 @@ class NotifService : NotificationListenerService() {
                 .setAutoCancel(true)
                 .build()
             nm.notify((System.currentTimeMillis() % 1000000000L).toInt(), nt)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     private fun sendTelegram(msg: String) {
@@ -343,7 +343,7 @@ class NotifService : NotificationListenerService() {
                 c.outputStream.use { it.write(body.toByteArray()) }
                 c.responseCode
                 c.disconnect()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {}
         }.start()
     }
 }
