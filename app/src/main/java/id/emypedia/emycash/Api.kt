@@ -9,7 +9,7 @@ import java.net.URL
 object Api {
     class Res(val code: Int, val body: String, val err: String? = null) {
         val ok: Boolean get() = code in 200..299
-        fun json(): JSONObject = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
+        fun json(): JSONObject = try { JSONObject(body) } catch (e: Exception) { JSONObject() }
     }
 
     // Alamat tanpa skema dilengkapi: jaringan lokal -> http, selain itu https.
@@ -38,10 +38,11 @@ object Api {
             c.readTimeout = 10000
             c.setRequestProperty("Accept", "application/json")
             if (key != null) c.setRequestProperty("X-Secret", key)
-            if (body != null) {
+            val payload: String? = body?.toString() ?: if (method == "POST") "{}" else null
+            if (payload != null) {
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json")
-                c.outputStream.use { it.write(body.toString().toByteArray()) }
+                c.outputStream.use { it.write(payload.toByteArray()) }
             }
             val code = c.responseCode
             val stream = if (code in 200..299) c.inputStream else c.errorStream
