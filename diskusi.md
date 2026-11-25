@@ -125,3 +125,10 @@ UI sengaja dibuat datar dan fungsional (bukan gradient/kartu): latar putih, teks
 - **Server**: retry webhook setelah restart, pembanding waktu-konstan, peringatan SECRET bawaan, `package.json`, `deploy/update.sh`, `deploy/unggah-apk.sh`.
 - **Belum teruji**: kompilasi Kotlin (tanpa compiler lokal), dan tampilan app di perangkat. Server diuji end-to-end dengan Node di sandbox (login, status, heartbeat, notif, unggah APK, alias lama).
 - **Backlog**: reset password dan verifikasi email, SQLite, alert saat heartbeat berhenti, admin UI, uji scan QR dinamis di tiga dompet.
+
+## 15. v1.2: Premium di app + edisi developer (25 Nov 2026)
+- **Server** (`server.js`): `subscribeOrder()` bersama untuk web dan app; `PAY_ORDER` = urutan pilihan (gopay, dana, shopeepay) dan hanya dompet yang ada di `qris/payloads.json` yang ditawarkan (`subMethods()`); `/api/plans` memuat `methods`; endpoint kunci-perangkat `/app/plans`, `/app/subscribe` (maks 10 order/10 menit/akun), `/app/order/:invoice` (hanya order langganan milik akun itu); `/app/dev` khusus `SECRET`. Metode tak valid ditolak 400. Diuji end-to-end di sandbox: tiga metode, QR PNG 200, bayar via `/notif` pemilik mengaktifkan paket, akun pemilik ditolak 400 di `/app/subscribe`, kunci perangkat ditolak 403 di `/app/dev`.
+- **Dashboard**: tombol Beli menampilkan pilihan QRIS merchant (`#paypick`) sebelum ke `/pay/INVOICE`.
+- **Android**: flavor `user` dan `dev` (`BuildConfig.DEV`, `applicationIdSuffix .dev`). Tab Premium (`loadPlans/renderPremium/startPay/pollPay`) dan tab Dev (`buildDevPage`, hanya edisi dev). Navigasi kini N tab (`pages`, `navItems`). Polling status order lewat ticker 3 detik; order kedaluwarsa tetap dipolling karena server menerima pembayaran telat sampai `GRACE_MIN`.
+- **Belum teruji**: kompilasi Kotlin dan tampilan di perangkat; scan QR dinamis di tiga dompet (lihat backlog bagian 10).
+- **Interpretasi "PG"**: seluruh dompet yang didukung (GoPay, DANA, ShopeePay). Kalau yang dimaksud payment gateway lain (Midtrans, Xendit, dll), itu belum ada.
