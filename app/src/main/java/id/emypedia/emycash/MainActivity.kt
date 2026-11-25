@@ -127,8 +127,14 @@ class MainActivity : Activity() {
     }
 
     private fun status(label: String, color: Int, pulse: Boolean = false) = tv("\u25CF  $label", 13f, color, true).apply {
-        if (pulse) ObjectAnimator.ofFloat(this, "alpha", 1f, 0.35f).apply {
-            duration = 800; repeatCount = ObjectAnimator.INFINITE; repeatMode = ObjectAnimator.REVERSE; start()
+        if (pulse) {
+            val anim = ObjectAnimator.ofFloat(this, "alpha", 1f, 0.35f).apply {
+                duration = 800; repeatCount = ObjectAnimator.INFINITE; repeatMode = ObjectAnimator.REVERSE; start()
+            }
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {}
+                override fun onViewDetachedFromWindow(v: View) { anim.cancel() }
+            })
         }
     }
 
@@ -283,7 +289,7 @@ class MainActivity : Activity() {
         s1.addView(button("Buka Notification Access", true) { openAccess() }, lp(12))
         s1.addView(button("Sambungkan ulang listener", false) { Cfg.rebind(this); toast("Menyambungkan ulang…"); lastSig = ""; handler.postDelayed({ render() }, 800) }, lp(8))
         s1.addView(button("Izinkan berjalan di latar belakang", false) {
-            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) { toast("Tidak tersedia di perangkat ini") }
+            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (e: Exception) { toast("Tidak tersedia di perangkat ini") }
         }, lp(8))
         setBox.addView(s1, lp())
         setBox.addView(divider(), divLp())
@@ -297,7 +303,7 @@ class MainActivity : Activity() {
         s2.addView(button("Buka halaman order", false) {
             val u = Uri.parse(fields["wh"]!!.text.toString().trim())
             if (u.scheme != null && u.authority != null) {
-                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.scheme + "://" + u.authority + "/"))) } catch (_: Exception) {}
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.scheme + "://" + u.authority + "/"))) } catch (e: Exception) {}
             } else toast("Isi alamat server dulu")
         }, lp(8))
         setBox.addView(s2, lp())
@@ -446,17 +452,17 @@ class MainActivity : Activity() {
     private fun versionInfo(): Pair<String, Int> = try {
         val pi = packageManager.getPackageInfo(packageName, 0)
         Pair(pi.versionName ?: "", pi.versionCode)
-    } catch (_: Exception) { Pair("", 0) }
+    } catch (e: Exception) { Pair("", 0) }
 
     private fun serverBase(): String =
         Api.base(fields["wh"]?.text?.toString() ?: Cfg.prefs(this).getString("wh", "") ?: "") ?: Cfg.DEFAULT_SERVER
 
     private fun openUrl(u: String) {
-        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (_: Exception) { toast("Tidak bisa membuka tautan") }
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (e: Exception) { toast("Tidak bisa membuka tautan") }
     }
 
     private fun acct(): JSONObject =
-        try { JSONObject(Cfg.prefs(this).getString("acct", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+        try { JSONObject(Cfg.prefs(this).getString("acct", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
 
     private fun fmtDate(t: Long): String = SimpleDateFormat("d MMM yyyy", Locale("id", "ID")).format(Date(t))
 
