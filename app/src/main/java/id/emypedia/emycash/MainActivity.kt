@@ -8,6 +8,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -52,8 +54,11 @@ class MainActivity : Activity() {
     private lateinit var todaySub: TextView
     private lateinit var historyPage: ScrollView
     private lateinit var settingsPage: ScrollView
-    private lateinit var navHist: TextView
-    private lateinit var navSet: TextView
+    private lateinit var premiumPage: ScrollView
+    private var devPage: ScrollView? = null
+    private val pages = ArrayList<View>()
+    private val navItems = ArrayList<TextView>()
+    private lateinit var premBox: LinearLayout
     private lateinit var navIndicator: View
     private lateinit var navBar: FrameLayout
     private lateinit var testResult: TextView
@@ -71,6 +76,7 @@ class MainActivity : Activity() {
     private val ticker = object : Runnable {
         override fun run() {
             render()
+            pollPay()
             val t = System.currentTimeMillis()
             if (t - lastRefresh > 60000) { lastRefresh = t; refreshStatus(false) }
             handler.postDelayed(this, 3000)
@@ -364,24 +370,32 @@ class MainActivity : Activity() {
         setBox.addView(saveWrap, lp())
         settingsPage = ScrollView(this).apply { addView(setBox); isVerticalScrollBarEnabled = false }
 
+        // ---- halaman premium + (edisi dev) halaman developer ----
+        premBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        premiumPage = ScrollView(this).apply { addView(premBox); isVerticalScrollBarEnabled = false }
+        if (BuildConfig.DEV) devPage = buildDevPage()
+
+        pages.add(historyPage); pages.add(premiumPage); pages.add(settingsPage)
+        val names = arrayListOf("Riwayat", "Premium", "Pengaturan")
+        devPage?.let { pages.add(it); names.add("Dev") }
+
         // ---- konten + navigasi bawah ----
         val content = FrameLayout(this)
-        content.addView(historyPage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        content.addView(settingsPage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        for (pg in pages) content.addView(pg, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(divider(), divLp())
 
         navBar = FrameLayout(this)
         val navRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun navItem(label: String, idx: Int): TextView = tv(label, 14f, MUTED, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, dp(16))
-            setOnClickListener { selectTab(idx, true) }
+        for ((idx, label) in names.withIndex()) {
+            val item = tv(label, 14f, MUTED, true).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(16), 0, dp(16))
+                setOnClickListener { selectTab(idx, true) }
+            }
+            navItems.add(item)
+            navRow.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        navHist = navItem("Riwayat", 0)
-        navSet = navItem("Pengaturan", 1)
-        navRow.addView(navHist, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        navRow.addView(navSet, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         navIndicator = View(this).apply { setBackgroundColor(INK) }
         navBar.addView(navRow, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         navBar.addView(navIndicator, FrameLayout.LayoutParams(0, dp(2)))
@@ -391,8 +405,8 @@ class MainActivity : Activity() {
         renderAccount()
         renderAcctLine()
         navBar.post {
-            navIndicator.layoutParams = (navIndicator.layoutParams as FrameLayout.LayoutParams).apply { width = navBar.width / 2 }
-            selectTab(tabIdx, false)
+            navIndicator.layoutParams = (navIndicator.layoutParams as FrameLayout.LayoutParams).apply { width = navBar.width / pages.size }
+            selectTab(tabIdx.coerceIn(0, pages.size - 1), false)
         }
     }
 
@@ -403,26 +417,26 @@ class MainActivity : Activity() {
 
     private fun selectTab(i: Int, animate: Boolean) {
         tabIdx = i
-        val show = if (i == 0) historyPage else settingsPage
-        val hide = if (i == 0) settingsPage else historyPage
-        show.animate().cancel(); hide.animate().cancel()
-        if (animate) {
-            hide.animate().alpha(0f).setDuration(120).withEndAction {
-                if (tabIdx == i) { hide.visibility = View.GONE; hide.alpha = 1f }
-            }.start()
-            show.alpha = 0f
-            show.translationY = dp(10).toFloat()
-            show.visibility = View.VISIBLE
-            show.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
-            navIndicator.animate().translationX((i * navBar.width / 2).toFloat()).setDuration(220)
-                .setInterpolator(DecelerateInterpolator()).start()
-        } else {
-            show.visibility = View.VISIBLE; show.alpha = 1f; show.translationY = 0f
-            hide.visibility = View.GONE; hide.alpha = 1f
-            navIndicator.translationX = (i * navBar.width / 2).toFloat()
+        for ((k, pg) in pages.withIndex()) {
+            pg.animate().cancel()
+            if (k == i) {
+                pg.visibility = View.VISIBLE
+                if (animate) {
+                    pg.alpha = 0f
+                    pg.translationY = dp(10).toFloat()
+                    pg.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
+                } else { pg.alpha = 1f; pg.translationY = 0f }
+            } else {
+                pg.visibility = View.GONE; pg.alpha = 1f; pg.translationY = 0f
+            }
         }
-        navHist.setTextColor(if (i == 0) INK else MUTED)
-        navSet.setTextColor(if (i == 1) INK else MUTED)
+        val target = (i * navBar.width / pages.size).toFloat()
+        if (animate) navIndicator.animate().translationX(target).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
+        else navIndicator.translationX = target
+        for ((k, nv) in navItems.withIndex()) nv.setTextColor(if (k == i) INK else MUTED)
+        val cur = pages[i]
+        if (cur === premiumPage) { if (payOrder == null) loadPlans() else renderPremium() }
+        if (cur === devPage) renderCoverage()
     }
 
     private fun testServer() {
@@ -471,7 +485,7 @@ class MainActivity : Activity() {
         val sb = StringBuilder()
         if (a.optBoolean("owner")) sb.append("Akun pemilik")
         else if (a.optBoolean("active")) sb.append("Paket ${a.optString("plan")} aktif sampai ${fmtDate(a.optLong("exp"))}")
-        else sb.append("Langganan tidak aktif. Perpanjang di dashboard supaya pembayaran dicocokkan.")
+        else sb.append("Langganan tidak aktif. Beli paket di tab Premium supaya pembayaran dicocokkan.")
         val m = a.optString("merchants")
         sb.append("\n").append(if (m.isBlank()) "Belum ada merchant QRIS. Daftarkan di dashboard." else "Merchant: $m")
         return sb.toString()
@@ -765,5 +779,396 @@ class MainActivity : Activity() {
             if (!firstRender && rendered.add(id)) { fadeIn(row, animIdx * 40); animIdx++ } else rendered.add(id)
         }
         firstRender = false
+    }
+
+    // =====================================================================
+    // Premium: beli paket, pilih QRIS merchant developer (GoPay / DANA / ShopeePay)
+    // =====================================================================
+    private var planJson: JSONObject? = null
+    private var premErr = ""
+    private var premLoading = false
+    private var selPlan: JSONObject? = null
+    private var payOrder: JSONObject? = null
+    private var qrBmp: Bitmap? = null
+    private var payStatus = ""          // pending | paid | expired
+    private var payBusy = false
+    private var polling = false
+
+    private fun walletColor(m: String): Int = when (m) {
+        "dana" -> Color.parseColor("#118EEA")
+        "shopeepay" -> Color.parseColor("#EE4D2D")
+        "gopay" -> Color.parseColor("#00AA13")
+        else -> FAINT
+    }
+
+    private fun fmtNum(n: Long): String = String.format(Locale.US, "%,d", n).replace(',', '.')
+
+    private fun absUrl(base: String, u: String): String = if (u.startsWith("/")) base + u else u
+
+    private fun premNote(t: String, c: Int) {
+        premBox.addView(tv(t, 13f, c).apply { setPadding(dp(20), dp(8), dp(20), dp(8)); setLineSpacing(0f, 1.15f) }, lp())
+    }
+
+    private fun premButton(label: String, filled: Boolean, color: Int = if (filled) Color.WHITE else INK, onClick: () -> Unit) {
+        premBox.addView(button(label, filled, color, onClick), lp(8).apply { leftMargin = dp(20); rightMargin = dp(20) })
+    }
+
+    private fun backToPlans() {
+        selPlan = null; payOrder = null; qrBmp = null; payStatus = ""
+        renderPremium()
+        loadPlans()
+    }
+
+    private fun loadPlans() {
+        val p = Cfg.prefs(this)
+        val key = p.getString("sec", "") ?: ""
+        val base = Api.base(p.getString("wh", "") ?: "")
+        if (key.isBlank() || base == null) { planJson = null; premErr = ""; renderPremium(); return }
+        if (premLoading) return
+        premLoading = true
+        if (planJson == null) renderPremium()
+        Thread {
+            val r = Api.call("GET", "$base/app/plans", key)
+            runOnUiThread {
+                premLoading = false
+                if (r.ok) { planJson = r.json(); premErr = "" } else { premErr = Api.message(r) }
+                if (payOrder == null) renderPremium()
+            }
+        }.start()
+    }
+
+    private fun renderPremium() {
+        premBox.removeAllViews()
+        val head = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(8)) }
+        head.addView(tv("Paket Premium", 20f, INK, true))
+        premBox.addView(head, lp())
+
+        val p = Cfg.prefs(this)
+        val signedIn = (p.getString("sec", "") ?: "").isNotBlank()
+        val pj = planJson
+        val po = payOrder
+        val sp = selPlan
+        when {
+            !signedIn -> {
+                premNote("Masuk dengan akun Emy Cash di tab Pengaturan untuk membeli paket.", MUTED)
+                premButton("Buka Pengaturan", true) { selectTab(2, true) }
+            }
+            po != null -> renderPay(po)
+            premErr.isNotEmpty() -> {
+                premNote(premErr, RED)
+                premButton("Coba lagi", false) { premErr = ""; loadPlans() }
+            }
+            pj != null && sp != null -> renderMethodPicker(sp, pj)
+            pj != null -> renderPlanList(pj)
+            else -> premNote("Memuat paket…", MUTED)
+        }
+        premBox.addView(View(this), lp(24))
+    }
+
+    private fun renderPlanList(pj: JSONObject) {
+        val active = pj.optBoolean("active")
+        premNote(
+            if (active) "Paket ${pj.optString("plan_name")} aktif sampai ${fmtDate(pj.optLong("plan_expires_at"))}. Membeli lagi menambah masa aktif."
+            else "Belum ada paket aktif. Pilih paket, lalu pilih QRIS merchant untuk membayar.",
+            if (active) OK else AMBER
+        )
+        premBox.addView(divider(), divLp(8))
+        val arr = pj.optJSONArray("plans") ?: JSONArray()
+        for (i in 0 until arr.length()) {
+            val pl = arr.getJSONObject(i)
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(16), dp(20), dp(16)) }
+            row.pressable()
+            val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            top.addView(tv(pl.optString("name"), 15f, INK, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(tv(rupiah(pl.optLong("price")), 15f, INK, true))
+            row.addView(top, lp())
+            row.addView(tv("${pl.optInt("merchants")} merchant · ${fmtNum(pl.optLong("ordersPerDay"))} order/hari · riwayat ${pl.optInt("historyDays")} hari", 12f, MUTED), lp(4))
+            row.setOnClickListener { selPlan = pl; renderPremium() }
+            premBox.addView(row, lp())
+            premBox.addView(divider(), divLp())
+        }
+        premButton("Muat ulang", false) { loadPlans(); toast("Memuat…") }
+    }
+
+    private fun renderMethodPicker(pl: JSONObject, pj: JSONObject) {
+        premBox.addView(tv("${pl.optString("name")} · ${rupiah(pl.optLong("price"))}", 16f, INK, true).apply { setPadding(dp(20), dp(4), dp(20), 0) }, lp())
+        premNote("Pilih QRIS merchant untuk membayar. Nominal dan QR dibuat khusus untuk pesanan ini.", MUTED)
+        val ms = pj.optJSONArray("methods") ?: JSONArray()
+        if (ms.length() == 0) premNote("Pembayaran paket belum tersedia di server. Coba lagi nanti.", AMBER)
+        for (i in 0 until ms.length()) {
+            val m = ms.getJSONObject(i)
+            val code = m.optString("method")
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = rounded(BG, 6, LINE)
+            }
+            row.addView(wallet(m.optString("name"), walletColor(code)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(tv(if (payBusy) "…" else "Bayar", 13f, MUTED))
+            row.pressable()
+            row.setOnClickListener { startPay(pl.optString("id"), code) }
+            premBox.addView(row, lp(8).apply { leftMargin = dp(20); rightMargin = dp(20) })
+        }
+        premButton("Kembali ke daftar paket", false) { selPlan = null; renderPremium() }
+    }
+
+    private fun startPay(planId: String, method: String) {
+        if (payBusy) return
+        val p = Cfg.prefs(this)
+        val key = p.getString("sec", "") ?: ""
+        val base = Api.base(p.getString("wh", "") ?: "") ?: return
+        payBusy = true
+        toast("Membuat pesanan…")
+        Thread {
+            val r = Api.call("POST", "$base/app/subscribe", key, JSONObject().put("plan", planId).put("method", method))
+            val j = r.json()
+            var bmp: Bitmap? = null
+            if (r.ok) {
+                val raw = Api.bytes(absUrl(base, j.optString("qr_url")))
+                if (raw != null) bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+            }
+            runOnUiThread {
+                payBusy = false
+                if (r.ok) {
+                    payOrder = j; qrBmp = bmp; payStatus = "pending"
+                    renderPremium()
+                } else {
+                    toast(Api.message(r))
+                    renderPremium()
+                }
+            }
+        }.start()
+    }
+
+    private fun renderPay(o: JSONObject) {
+        val base = Api.base(Cfg.prefs(this).getString("wh", "") ?: "") ?: Cfg.DEFAULT_SERVER
+        val total = o.optLong("total")
+        val name = o.optString("method_name")
+        when (payStatus) {
+            "paid" -> {
+                premBox.addView(tv("Pembayaran diterima", 18f, OK, true).apply { setPadding(dp(20), dp(8), dp(20), 0) }, lp())
+                premNote("Paket sudah aktif. Terima kasih.", MUTED)
+                premButton("Selesai", true) { backToPlans() }
+                return
+            }
+            "expired" -> {
+                premBox.addView(tv("Pesanan kedaluwarsa", 18f, AMBER, true).apply { setPadding(dp(20), dp(8), dp(20), 0) }, lp())
+                premNote("Kalau sudah terlanjur membayar, tunggu sebentar: paket aktif otomatis begitu pembayaran terbaca. Kalau belum, buat pesanan baru.", MUTED)
+                premButton("Buat pesanan baru", true) { payOrder = null; qrBmp = null; payStatus = ""; renderPremium() }
+                return
+            }
+        }
+        premBox.addView(tv("Bayar dengan $name", 16f, INK, true).apply { setPadding(dp(20), dp(4), dp(20), 0) }, lp())
+        premBox.addView(tv(rupiah(total), 28f, INK, true).apply { setPadding(dp(20), dp(10), dp(20), 0) }, lp())
+        premNote("Scan QR di bawah dengan aplikasi ${name} atau e-wallet lain yang mendukung QRIS, lalu bayar sesuai nominal tepat di atas. Paket aktif otomatis setelah pembayaran terbaca.", MUTED)
+        val box = FrameLayout(this).apply { background = rounded(Color.WHITE, 6, LINE) }
+        val bmp = qrBmp
+        if (bmp != null) {
+            box.addView(ImageView(this).apply {
+                setImageBitmap(bmp)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        } else {
+            box.addView(tv("QR tidak termuat.\nKetuk “Buka halaman bayar”.", 13f, MUTED).apply { gravity = Gravity.CENTER }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
+        premBox.addView(box, LinearLayout.LayoutParams(dp(260), dp(260)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(8) })
+        val until = SimpleDateFormat("HH:mm", Locale("id", "ID")).format(Date(o.optLong("expires_at")))
+        premBox.addView(tv("Berlaku sampai $until · ${o.optString("invoice")}", 12f, FAINT).apply { gravity = Gravity.CENTER }, lp(10))
+        premBox.addView(status("Menunggu pembayaran", AMBER, true).apply { gravity = Gravity.CENTER }, lp(12))
+        premButton("Salin nominal", false) { copy(total.toString()) }
+        premButton("Buka halaman bayar", false) { openUrl(absUrl(base, o.optString("pay_url"))) }
+        premButton("Ganti metode / batalkan", false, RED) { payOrder = null; qrBmp = null; payStatus = ""; renderPremium() }
+    }
+
+    // Dipanggil tiap 3 detik oleh ticker selama ada pesanan premium yang menunggu
+    private fun pollPay() {
+        val o = payOrder ?: return
+        if ((payStatus != "pending" && payStatus != "expired") || polling) return
+        val p = Cfg.prefs(this)
+        val key = p.getString("sec", "") ?: ""
+        val base = Api.base(p.getString("wh", "") ?: "") ?: return
+        val inv = o.optString("invoice")
+        polling = true
+        Thread {
+            val r = Api.call("GET", "$base/app/order/$inv", key)
+            runOnUiThread {
+                polling = false
+                if (payOrder?.optString("invoice") != inv) return@runOnUiThread
+                if (r.ok) {
+                    val st = r.json().optString("status")
+                    if (st == "paid" || (st == "expired" && payStatus != "expired")) {
+                        payStatus = st
+                        if (st == "paid") { toast("Pembayaran diterima. Paket aktif."); refreshStatus(false) }
+                        renderPremium()
+                    }
+                }
+            }
+        }.start()
+    }
+
+    // =====================================================================
+    // Edisi developer: cakupan PG, uji parser lokal, info server pemilik
+    // =====================================================================
+    private var devCover: LinearLayout? = null
+
+    // kode, nama, pola package bawaan, contoh package untuk uji "dipantau"
+    private val GW = listOf(
+        arrayOf("gopay", "GoPay", "com.gojek*, com.gopay*", "com.gojek.gopaymerchant"),
+        arrayOf("dana", "DANA", "id.dana*, com.dana*", "id.dana.business"),
+        arrayOf("shopeepay", "ShopeePay", "com.shopee*, com.shopeepay*", "com.shopee.id")
+    )
+
+    private val SAMPLES = listOf(
+        arrayOf("GoPay", "com.gojek.gopaymerchant", "Pembayaran QRIS statis diterima", "Rp 10.000 di Toko Emy, dari pelanggan."),
+        arrayOf("DANA", "id.dana", "Pembayaran Masuk", "Rp10.000 diterima DANA Bisnis."),
+        arrayOf("ShopeePay", "com.shopee.id", "Pembayaran sebesar Rp10.000 diterima", "telah diterima pada transaksi 12345")
+    )
+
+    private fun secBox(title: String, desc: String? = null) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(20), dp(20), dp(20), dp(20))
+        addView(tv(title, 15f, INK, true))
+        if (desc != null) addView(tv(desc, 13f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(4))
+    }
+
+    private fun stLabel(st: String): String = when (st) {
+        "paid" -> "Lunas"
+        "nomatch" -> "Tidak cocok"
+        "fail" -> "Gagal kirim"
+        "sending" -> "Mengirim"
+        "local" -> "Tercatat"
+        "unmon" -> "Belum dipantau"
+        else -> st
+    }
+
+    private fun buildDevPage(): ScrollView {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        val s1 = secBox("Cakupan payment gateway", "Semua dompet yang dikonfirmasi otomatis (GoPay, DANA, ShopeePay), pola package yang dipantau, dan notifikasi terakhir di perangkat ini.")
+        val cover = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        devCover = cover
+        s1.addView(cover, lp(8))
+        s1.addView(button("Segarkan", false) { renderCoverage() }, lp(8))
+        box.addView(s1, lp())
+        box.addView(divider(), divLp())
+
+        val s2 = secBox("Uji parser (lokal)", "Hanya diproses di perangkat, tidak dikirim ke server, jadi aman dipakai saat ada order aktif.")
+        val ePkg = editBox("Package", false)
+        val eTi = editBox("Judul notifikasi", false)
+        val eTx = editBox("Isi notifikasi", false)
+        val out = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        s2.addView(ePkg, lp(12))
+        s2.addView(eTi, lp(8))
+        s2.addView(eTx, lp(8))
+        for (sm in SAMPLES) {
+            s2.addView(button("Isi contoh ${sm[0]}", false) {
+                ePkg.setText(sm[1]); eTi.setText(sm[2]); eTx.setText(sm[3])
+            }, lp(8))
+        }
+        s2.addView(button("Uji", true) {
+            runParserTest(ePkg.text.toString().trim(), eTi.text.toString(), eTx.text.toString(), out)
+        }, lp(12))
+        s2.addView(out, lp(10))
+        box.addView(s2, lp())
+        box.addView(divider(), divLp())
+
+        val s3 = secBox("Server pemilik", "Butuh Secret pemilik (Pengaturan > Server, mode manual). Menampilkan QRIS developer, pesanan premium, dan pengguna.")
+        val srvOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        s3.addView(button("Muat info developer", true) { loadDevInfo(srvOut) }, lp(12))
+        s3.addView(srvOut, lp(10))
+        box.addView(s3, lp())
+        box.addView(divider(), divLp())
+
+        val s4 = secBox("Build")
+        val key = Cfg.prefs(this).getString("sec", "") ?: ""
+        s4.addView(tv("Emy Cash ${versionInfo().first} (${versionInfo().second})\n${packageName}\nServer: ${serverBase()}\nKunci: ${if (key.length > 6) key.take(6) + "…" else if (key.isEmpty()) "belum ada" else "pendek"}", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }, lp(8))
+        s4.addView(tv("Edisi dev terpasang terpisah dari edisi user. Matikan Notification Access salah satunya agar notifikasi tidak terkirim ganda.", 12f, AMBER).apply { setLineSpacing(0f, 1.15f) }, lp(10))
+        box.addView(s4, lp())
+        box.addView(View(this), lp(24))
+
+        return ScrollView(this).apply { addView(box); isVerticalScrollBarEnabled = false }
+    }
+
+    private fun renderCoverage() {
+        val box = devCover ?: return
+        box.removeAllViews()
+        val arr = try { JSONArray(Cfg.prefs(this).getString("h", "[]") ?: "[]") } catch (e: Exception) { JSONArray() }
+        for (g in GW) {
+            val m = g[0]
+            var n = 0
+            var lastT = ""
+            var lastSt = ""
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                if (!o.has("am")) continue
+                if (detectMethod(o.optString("p"), o.optString("ti"), o.optString("tx")) != m) continue
+                if (n == 0) { lastT = o.optString("t"); lastSt = o.optString("st") }
+                n++
+            }
+            val on = Cfg.monitored(this, g[3])
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(10), 0, dp(10)) }
+            val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            top.addView(wallet(g[1], walletColor(m)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(status(if (on) "Dipantau" else "Tidak dipantau", if (on) OK else RED))
+            row.addView(top, lp())
+            row.addView(tv("Package: ${g[2]}", 12f, MUTED), lp(4))
+            row.addView(tv(if (n == 0) "Belum ada notifikasi pembayaran di riwayat" else "$n notifikasi · terakhir $lastT · ${stLabel(lastSt)}", 12f, MUTED), lp(2))
+            box.addView(row, lp())
+            box.addView(divider(), divLp())
+        }
+    }
+
+    private fun runParserTest(pkg: String, title: String, text: String, out: TextView) {
+        if (pkg.isEmpty() && title.isEmpty() && text.isEmpty()) { out.setTextColor(RED); out.text = "Isi package, judul, dan teks (atau pakai contoh)."; return }
+        val amt = parseAmount(title, text)
+        val m = detectMethod(pkg, title, text)
+        val pay = isPayment(pkg, title, text)
+        val mon = Cfg.monitored(this, pkg)
+        val sb = StringBuilder()
+        sb.append("Nominal: ").append(if (amt == null) "tidak terbaca" else rupiah(amt)).append("\n")
+        sb.append("Metode: ").append(if (m == null) "tidak dikenali" else methodName(m)).append("\n")
+        sb.append("Dianggap pembayaran masuk: ").append(if (pay) "ya" else "tidak").append("\n")
+        sb.append("Package dipantau: ").append(if (mon) "ya" else "belum (mode luas ${if (Cfg.wide(this)) "aktif" else "mati"})")
+        out.text = sb.toString()
+        out.setTextColor(if (pay && mon) OK else AMBER)
+    }
+
+    private fun loadDevInfo(out: TextView) {
+        val p = Cfg.prefs(this)
+        val key = p.getString("sec", "") ?: ""
+        val base = Api.base(p.getString("wh", "") ?: "")
+        if (key.isBlank() || base == null) {
+            out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server, lalu simpan."; return
+        }
+        out.setTextColor(MUTED); out.text = "Memuat…"
+        Thread {
+            val r = Api.call("GET", "$base/app/dev", key)
+            var msg: String
+            if (r.ok) {
+                val j = r.json()
+                val sb = StringBuilder()
+                sb.append("Server ${j.optString("base")} · v${j.optString("version")}\n")
+                val qs = j.optJSONArray("owner_qris")
+                if (qs != null) for (i in 0 until qs.length()) {
+                    val q = qs.getJSONObject(i)
+                    val st = if (!q.optBoolean("configured")) "belum diisi" else if (q.optBoolean("crc_ok")) "OK" else "CRC salah"
+                    sb.append("QRIS ${q.optString("name")}: $st\n")
+                }
+                val so = j.optJSONObject("subscription_orders")
+                if (so != null) sb.append("Order premium: ${so.optInt("pending")} menunggu · ${so.optInt("paid_today")} lunas hari ini (${rupiah(so.optLong("paid_today_total"))})\n")
+                val us = j.optJSONObject("users")
+                if (us != null) sb.append("Pengguna: ${us.optInt("total")} · aktif ${us.optInt("active")} · perangkat online ${us.optInt("devices_online")}\n")
+                val um = j.optJSONArray("unmatched")
+                sb.append("Pembayaran tak cocok terakhir: ${um?.length() ?: 0}")
+                msg = sb.toString()
+            } else if (r.code == 403) {
+                msg = "Kunci ini bukan Secret pemilik. Isi Secret di Pengaturan > Server (mode manual)."
+            } else if (r.code == 404) {
+                msg = "Server belum mendukung panel developer (HTTP 404). Perbarui gateway ke versi terbaru."
+            } else msg = Api.message(r)
+            runOnUiThread { out.setTextColor(if (r.ok) INK else RED); out.text = msg }
+        }.start()
     }
 }
