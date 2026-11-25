@@ -9,8 +9,29 @@ android {
         applicationId = "id.emypedia.emycash"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
+    }
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
+    // Dua edisi: "user" (aplikasi publik) dan "dev" (versi developer: panel cakupan PG, uji parser, info server pemilik).
+    // Edisi dev memakai applicationId berakhiran .dev sehingga terpasang terpisah dari edisi user.
+    flavorDimensions += "edisi"
+    productFlavors {
+        create("user") {
+            dimension = "edisi"
+            resValue("string", "app_name", "Emy Cash")
+            buildConfigField("boolean", "DEV", "false")
+        }
+        create("dev") {
+            dimension = "edisi"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "Emy Cash Dev")
+            buildConfigField("boolean", "DEV", "true")
+        }
     }
     // Tanda tangan tetap (opsional): isi secret KEYSTORE_B64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD di GitHub.
     // Tanpa itu APK memakai kunci debug runner, dan pembaruan di atas versi lama gagal dipasang (tanda tangan beda).
