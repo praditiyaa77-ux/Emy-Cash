@@ -171,13 +171,89 @@ class NotifService : NotificationListenerService() {
 
     private val seen = HashMap<String, Long>()
 
+    // ---- permintaan bayar dari server (long-poll /app/events) ----
+    @Volatile private var gen = 0
+
+    private fun nap(ms: Long) { try { Thread.sleep(ms) } catch (e: InterruptedException) {} }
+
+    private fun startEvents() {
+        val my = ++gen
+        val t = Thread {
+            var fails = 0
+            while (gen == my) {
+                val p = Cfg.prefs(this)
+                val base = Api.base(p.getString("wh", "") ?: "")
+                val key = p.getString("sec", "") ?: ""
+                if (base == null || key.isBlank() || !p.getBoolean("req", true)) { nap(15000); continue }
+                val cur = p.getLong("evc", 0L)
+                val url = if (cur == 0L) "$base/app/events" else "$base/app/events?after=$cur&wait=20"
+                val t0 = System.currentTimeMillis()
+                val r = Api.call("GET", url, key, null, 30000)
+                if (gen != my) break
+                if (!r.ok) { fails++; nap(minOf(60000L, 5000L * fails)); continue }
+                fails = 0
+                val j = r.json()
+                val arr = j.optJSONArray("events")
+                if (arr != null) for (i in 0 until arr.length()) {
+                    try { handleEvent(arr.getJSONObject(i)) } catch (e: Exception) {}
+                }
+                val cursor = j.optLong("cursor", cur)
+                if (cursor != cur) p.edit().putLong("evc", cursor).apply()
+                // server yang membalas cepat tanpa menunggu: jangan memutar loop rapat
+                if (System.currentTimeMillis() - t0 < 2000 && (arr == null || arr.length() == 0)) nap(3000)
+            }
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
+    private fun stopEvents() { gen++ }
+
+    private fun handleEvent(ev: JSONObject) {
+        if (ev.optString("type") != "order.created") return
+        val o = ev.optJSONObject("order") ?: return
+        val id = ev.optLong("id")
+        val inv = o.optString("invoice")
+        val name = o.optString("merchant")
+        val total = o.optLong("total")
+        val ref = o.optString("ref")
+        val sub = o.optJSONObject("subscription")
+        val at = ev.optLong("at", System.currentTimeMillis())
+        val title = "Permintaan bayar ${rupiah(total)}"
+        val d = StringBuilder()
+        d.append(name).append(", ").append(inv)
+        if (sub != null) d.append(", paket ").append(sub.optString("plan_name"))
+        if (ref.isNotBlank()) d.append(", ref ").append(ref)
+        val time = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).format(Date(at))
+        Cfg.addEntry(this, JSONObject().put("i", id).put("t", time).put("p", "emy.request")
+            .put("ti", "Permintaan bayar $name").put("tx", d.toString()).put("am", total).put("st", "req").put("inv", inv))
+        postNotif(title, d.toString())
+        // Telegram dari server lebih utama; bila tidak aktif, pakai Telegram yang diatur di app ini
+        if (!ev.optBoolean("telegram_sent")) {
+            val m = StringBuilder("Permintaan bayar baru\nInvoice: $inv\nMerchant: $name\nNominal: ${rupiah(o.optLong("amount"))}")
+            if (o.optLong("fee") > 0) m.append("\nBiaya layanan: ").append(rupiah(o.optLong("fee")))
+            if (o.optLong("extra") > 0) m.append("\nKode unik: +").append(o.optLong("extra"))
+            m.append("\nTotal bayar: ").append(rupiah(total))
+            if (ref.isNotBlank()) m.append("\nRef: ").append(ref)
+            m.append("\nLink bayar: ").append(o.optString("pay_url"))
+            sendTelegram(m.toString())
+        }
+    }
+
+    override fun onDestroy() {
+        stopEvents()
+        super.onDestroy()
+    }
+
     override fun onListenerConnected() {
         connected = true
         Cfg.heartbeat(applicationContext)
+        startEvents()
     }
 
     override fun onListenerDisconnected() {
         connected = false
+        stopEvents()
         if (Build.VERSION.SDK_INT >= 24) {
             try { NotificationListenerService.requestRebind(ComponentName(this, NotifService::class.java)) } catch (e: Exception) {}
         }
