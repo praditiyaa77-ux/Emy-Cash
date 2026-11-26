@@ -3,10 +3,6 @@ package id.emypedia.emycash
 import android.Manifest
 import android.animation.ObjectAnimator
 import android.app.Activity
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -41,15 +37,15 @@ import java.net.URL
 import java.util.Calendar
 
 class MainActivity : Activity() {
-    private val BG = Color.parseColor("#0D0E13")
-    private val SURFACE = Color.parseColor("#161824")
-    private val INK = Color.parseColor("#F3F1FF")
-    private val MUTED = Color.parseColor("#9A9CB5")
-    private val FAINT = Color.parseColor("#62657D")
-    private val LINE = Color.parseColor("#2A2D40")
-    private val OK = Color.parseColor("#B8FF5A")
-    private val AMBER = Color.parseColor("#FFC24D")
-    private val RED = Color.parseColor("#FF5C7A")
+    private val BG = Color.WHITE
+    private val SURFACE = Color.parseColor("#F5F7FA")
+    private val INK = Color.parseColor("#0E1B2C")
+    private val MUTED = Color.parseColor("#667085")
+    private val FAINT = Color.parseColor("#98A2B3")
+    private val LINE = Color.parseColor("#E6E9EE")
+    private val OK = Color.parseColor("#0A7D55")
+    private val AMBER = Color.parseColor("#B26A00")
+    private val RED = Color.parseColor("#B42318")
 
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
@@ -60,7 +56,6 @@ class MainActivity : Activity() {
     private lateinit var settingsPage: ScrollView
     private lateinit var premiumPage: ScrollView
     private var devPage: ScrollView? = null
-    private var devSrvOut: TextView? = null
     private val pages = ArrayList<View>()
     private val navItems = ArrayList<TextView>()
     private lateinit var premBox: LinearLayout
@@ -77,8 +72,6 @@ class MainActivity : Activity() {
     private lateinit var acctLine: TextView
     private lateinit var updateLine: TextView
     private var lastRefresh = 0L
-    private var lastDevPoll = 0L
-    private var devPolling = false
     private var busy = false
     private val ticker = object : Runnable {
         override fun run() {
@@ -86,7 +79,6 @@ class MainActivity : Activity() {
             pollPay()
             val t = System.currentTimeMillis()
             if (t - lastRefresh > 60000) { lastRefresh = t; refreshStatus(false) }
-            if (BuildConfig.DEV && t - lastDevPoll > 12000) { lastDevPoll = t; pollDevEvents() }
             handler.postDelayed(this, 3000)
         }
     }
@@ -152,7 +144,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun button(label: String, filled: Boolean, textColor: Int = if (filled) BG else INK, onClick: () -> Unit) =
+    private fun button(label: String, filled: Boolean, textColor: Int = if (filled) Color.WHITE else INK, onClick: () -> Unit) =
         Button(this).apply {
             text = label
             transformationMethod = null
@@ -162,13 +154,22 @@ class MainActivity : Activity() {
             setTextColor(textColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            background = if (filled) rounded(OK, 6) else rounded(SURFACE, 6, LINE)
+            background = if (filled) rounded(INK, 6) else rounded(BG, 6, LINE)
             pressable()
             setOnClickListener { onClick() }
         }
 
     private fun walletOf(pkg: String, title: String, text: String): Pair<String, Int> {
         if (pkg.startsWith("com.whatsapp")) return Pair("WhatsApp", Color.parseColor("#25D366"))
+        if (pkg == "emy.request") {
+            val t = "$title $text".lowercase()
+            return when {
+                "dana" in t -> Pair("DANA", Color.parseColor("#118EEA"))
+                "shopeepay" in t -> Pair("ShopeePay", Color.parseColor("#EE4D2D"))
+                "gopay" in t -> Pair("GoPay", Color.parseColor("#00AA13"))
+                else -> Pair("Permintaan bayar", FAINT)
+            }
+        }
         return when (detectMethod(pkg, title, text)) {
             "dana" -> Pair("DANA", Color.parseColor("#118EEA"))
             "shopeepay" -> Pair("ShopeePay", Color.parseColor("#EE4D2D"))
@@ -194,9 +195,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        window.statusBarColor = BG
-        window.navigationBarColor = BG
-        window.decorView.systemUiVisibility = 0
+        window.statusBarColor = Color.WHITE
+        window.navigationBarColor = Color.WHITE
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -340,6 +342,21 @@ class MainActivity : Activity() {
         setBox.addView(s3, lp())
         setBox.addView(divider(), divLp())
 
+        val sR = section("Permintaan bayar")
+        val reqRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        reqRow.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(tv("Notifikasi permintaan bayar", 14f, INK, true))
+            addView(tv("Setiap order baru dari API muncul di sini dengan invoice, nominal, dan merchant. Telegram diatur di dashboard; bila belum diatur di sana, app meneruskan lewat Telegram di bawah.", 12f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(2))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        reqRow.addView(Switch(this).apply {
+            isChecked = p.getBoolean("req", true)
+            setOnCheckedChangeListener { _, on -> p.edit().putBoolean("req", on).apply() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(12) })
+        sR.addView(reqRow, lp(12))
+        setBox.addView(sR, lp())
+        setBox.addView(divider(), divLp())
+
         val s4 = section("Telegram (opsional)")
         field(s4, "Bot token", "tok", pw = true)
         field(s4, "Chat ID", "chat")
@@ -443,7 +460,7 @@ class MainActivity : Activity() {
         for ((k, nv) in navItems.withIndex()) nv.setTextColor(if (k == i) INK else MUTED)
         val cur = pages[i]
         if (cur === premiumPage) { if (payOrder == null) loadPlans() else renderPremium() }
-        if (cur === devPage) { renderCoverage(); devSrvOut?.let { loadDevEvents(it) } }
+        if (cur === devPage) renderCoverage()
     }
 
     private fun testServer() {
@@ -727,6 +744,7 @@ class MainActivity : Activity() {
                 "sending" -> Triple("Mengirim", MUTED, true)
                 "local" -> Triple("Tercatat", MUTED, false)
                 "unmon" -> Triple("Belum dipantau", AMBER, false)
+                "req" -> Triple("Menunggu bayar", AMBER, false)
                 else -> null
             }
 
@@ -816,7 +834,7 @@ class MainActivity : Activity() {
         premBox.addView(tv(t, 13f, c).apply { setPadding(dp(20), dp(8), dp(20), dp(8)); setLineSpacing(0f, 1.15f) }, lp())
     }
 
-    private fun premButton(label: String, filled: Boolean, color: Int = if (filled) BG else INK, onClick: () -> Unit) {
+    private fun premButton(label: String, filled: Boolean, color: Int = if (filled) Color.WHITE else INK, onClick: () -> Unit) {
         premBox.addView(button(label, filled, color, onClick), lp(8).apply { leftMargin = dp(20); rightMargin = dp(20) })
     }
 
@@ -1047,6 +1065,7 @@ class MainActivity : Activity() {
         "sending" -> "Mengirim"
         "local" -> "Tercatat"
         "unmon" -> "Belum dipantau"
+        "req" -> "Menunggu bayar"
         else -> st
     }
 
@@ -1083,12 +1102,42 @@ class MainActivity : Activity() {
 
         val s3 = secBox("Server pemilik", "Butuh Secret pemilik (Pengaturan > Server, mode manual). Menampilkan QRIS developer, pesanan premium, dan pengguna.")
         val srvOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
-        devSrvOut = srvOut
         s3.addView(button("Muat info developer", true) { loadDevInfo(srvOut) }, lp(12))
-        s3.addView(button("Muat payment request", false) { loadDevEvents(srvOut) }, lp(8))
-        s3.addView(button("Generate / recreate Secret", false) { rotateOwnerSecret(srvOut) }, lp(8))
         s3.addView(srvOut, lp(10))
         box.addView(s3, lp())
+        box.addView(divider(), divLp())
+
+        val s6 = secBox("Secret pemilik", "Buat atau buat ulang Secret pemilik secara otomatis. Secret lama diganti dan yang baru tersimpan di app ini, tanpa perlu disalin.")
+        val secOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        s6.addView(button("Buat atau buat ulang Secret", true) {
+            android.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle("Buat ulang Secret?")
+                .setMessage("Secret lama berhenti berlaku setelah 2 menit. Secret baru tersimpan otomatis di app ini. Skrip atau perangkat lain yang memakai Secret lama harus diperbarui.")
+                .setPositiveButton("Buat ulang") { _, _ -> rotateSecret(secOut) }
+                .setNegativeButton("Batal", null)
+                .show()
+        }, lp(12))
+        s6.addView(secOut, lp(10))
+        box.addView(s6, lp())
+        box.addView(divider(), divLp())
+
+        val s7 = secBox("Telegram pemilik", "Kirim setiap permintaan bayar dan pembayaran lunas dari order layanan (langganan) ke Telegram. Token disimpan di server.")
+        val tgTok = editBox("Bot token", true)
+        val tgChat = editBox("Chat ID atau @kanal", false)
+        val tgOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        s7.addView(tgTok, lp(12))
+        s7.addView(tgChat, lp(8))
+        s7.addView(button("Simpan dan aktifkan", true) {
+            val b = JSONObject().put("chat_id", tgChat.text.toString().trim()).put("enabled", true).put("on_created", true).put("on_paid", true)
+            val tk = tgTok.text.toString().trim()
+            if (tk.isNotEmpty()) b.put("token", tk)
+            ownerTelegram("/app/dev/telegram", b, tgOut) { j -> "Telegram aktif ke chat ${j.optJSONObject("telegram")?.optString("chat_id") ?: ""}" }
+        }, lp(12))
+        s7.addView(button("Kirim pesan tes", false) {
+            ownerTelegram("/app/dev/telegram-test", JSONObject(), tgOut) { _ -> "Pesan tes terkirim" }
+        }, lp(8))
+        s7.addView(tgOut, lp(10))
+        box.addView(s7, lp())
         box.addView(divider(), divLp())
 
         val s4 = secBox("Build")
@@ -1112,7 +1161,7 @@ class MainActivity : Activity() {
             var lastSt = ""
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                if (!o.has("am")) continue
+                if (!o.has("am") || o.optString("st") == "req") continue
                 if (detectMethod(o.optString("p"), o.optString("ti"), o.optString("tx")) != m) continue
                 if (n == 0) { lastT = o.optString("t"); lastSt = o.optString("st") }
                 n++
@@ -1145,115 +1194,55 @@ class MainActivity : Activity() {
         out.setTextColor(if (pay && mon) OK else AMBER)
     }
 
-
-
-    // Polling ringan saat aplikasi Dev terbuka. Untuk aplikasi tertutup, gunakan Telegram server-side.
-    private fun pollDevEvents() {
-        if (devPolling) return
-        val cred = devCredentials() ?: return
-        devPolling = true
+    // Buat atau buat ulang Secret pemilik di server, lalu simpan otomatis di app ini
+    private fun rotateSecret(out: TextView) {
+        val p = Cfg.prefs(this)
+        val base = Api.base(p.getString("wh", "") ?: "")
+        if (base == null) { out.setTextColor(RED); out.text = "Isi alamat server di Pengaturan > Server dulu, lalu simpan."; return }
+        // server baru yang Secret-nya belum diganti masih memakai nilai bawaan
+        val auth = (p.getString("sec", "") ?: "").ifBlank { "ganti-ini" }
+        out.setTextColor(MUTED); out.text = "Membuat Secret…"
         Thread {
-            try {
-                val r = Api.call("GET", "${cred.first}/app/dev/events", cred.second)
-                if (r.ok) {
-                    val arr = r.json().optJSONArray("events") ?: JSONArray()
-                    val prefs = Cfg.prefs(this)
-                    val last = prefs.getLong("dev_event_seen", 0L)
-                    val initialized = prefs.getBoolean("dev_event_initialized", false)
-                    var newest = last
-                    val fresh = ArrayList<JSONObject>()
-                    for (i in 0 until arr.length()) {
-                        val e = arr.optJSONObject(i) ?: continue
-                        val ts = e.optLong("created_at")
-                        if (ts > newest) newest = ts
-                        if (initialized && ts > last) fresh.add(e)
-                    }
-                    if (!initialized) {
-                        prefs.edit().putBoolean("dev_event_initialized", true).putLong("dev_event_seen", newest).apply()
-                    } else if (newest > last) {
-                        prefs.edit().putLong("dev_event_seen", newest).apply()
-                        fresh.asReversed().forEach { e ->
-                            val invoice = e.optString("invoice")
-                            val body = "${e.optString("merchant")} · ${rupiah(e.optLong("total"))} · $invoice"
-                            runOnUiThread { postDevPaymentNotification(body) }
-                        }
+            val r = Api.call("POST", "$base/app/dev/secret", auth, JSONObject())
+            var ns = ""
+            val msg = when {
+                r.ok -> {
+                    ns = r.json().optString("secret")
+                    if (ns.isBlank()) "Server tidak mengirim Secret baru." else {
+                        p.edit().putString("sec", ns).apply()
+                        "Secret baru sudah tersimpan di app ini.\n$ns\nKetuk untuk menyalin."
                     }
                 }
-            } finally { devPolling = false }
-        }.start()
-    }
-
-    private fun postDevPaymentNotification(body: String) {
-        try {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(
-                NotificationChannel("emy_payment_request", "Payment request", NotificationManager.IMPORTANCE_DEFAULT)
-            )
-            val pi = PendingIntent.getActivity(this, 71, Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val n = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "emy_payment_request")
-                else Notification.Builder(this)
-            nm.notify((System.currentTimeMillis() % 1000000000L).toInt(), n.setSmallIcon(R.drawable.ic_stat_bell)
-                .setContentTitle("Payment request baru").setContentText(body)
-                .setStyle(Notification.BigTextStyle().bigText(body)).setContentIntent(pi).setAutoCancel(true).build())
-        } catch (_: Exception) {}
-    }
-
-    private fun devCredentials(): Triple<String, String, String>? {
-        val p = Cfg.prefs(this)
-        val key = p.getString("sec", "") ?: ""
-        val base = Api.base(p.getString("wh", "") ?: "") ?: return null
-        if (key.isBlank()) return null
-        return Triple(base, key, "")
-    }
-
-    private fun rotateOwnerSecret(out: TextView) {
-        val cred = devCredentials()
-        if (cred == null) { out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server."; return }
-        out.setTextColor(MUTED); out.text = "Membuat Secret baru…"
-        Thread {
-            val r = Api.call("POST", "${cred.first}/app/dev/secret", cred.second, JSONObject())
-            val j = r.json()
-            val secret = j.optString("secret")
-            val msg = if (r.ok && secret.isNotBlank()) {
-                // Simpan otomatis pada perangkat ini; tampilkan sekali agar bisa dicadangkan.
-                Cfg.prefs(this).edit().putString("sec", secret).apply()
-                "Secret baru berhasil dibuat dan disimpan di perangkat ini.\n\n$secret\n\nSalin dan simpan di tempat aman. Secret hanya ditampilkan sekali.\nSecret ADMIN dari environment server tetap menjadi kunci bootstrap."
-            } else Api.message(r)
+                r.code == 401 -> "Secret saat ini ditolak. Isi Secret pemilik yang benar di Pengaturan > Server, lalu coba lagi."
+                r.code == 403 -> "Kunci ini bukan Secret pemilik."
+                r.code == 404 -> "Server belum mendukung fitur ini (HTTP 404). Perbarui gateway ke versi terbaru."
+                else -> Api.message(r)
+            }
             runOnUiThread {
-                out.setTextColor(if (r.ok) OK else RED)
+                out.setTextColor(if (ns.isNotBlank()) OK else RED)
                 out.text = msg
-                if (r.ok && secret.isNotBlank()) {
-                    fields["sec"]?.setText(secret)
-                    copy(secret)
+                if (ns.isNotBlank()) {
+                    fields["sec"]?.setText(ns)
+                    out.setOnClickListener { copy(ns) }
                 }
             }
         }.start()
     }
 
-    private fun loadDevEvents(out: TextView) {
-        val cred = devCredentials()
-        if (cred == null) { out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server."; return }
-        out.setTextColor(MUTED); out.text = "Memuat payment request…"
+    private fun ownerTelegram(path: String, body: JSONObject, out: TextView, okMsg: (JSONObject) -> String) {
+        val p = Cfg.prefs(this)
+        val key = p.getString("sec", "") ?: ""
+        val base = Api.base(p.getString("wh", "") ?: "")
+        if (key.isBlank() || base == null) {
+            out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server, lalu simpan."; return
+        }
+        out.setTextColor(MUTED); out.text = "Memproses…"
         Thread {
-            val r = Api.call("GET", "${cred.first}/app/dev/events", cred.second)
+            val r = Api.call("POST", "$base$path", key, body)
             val j = r.json()
-            val arr = j.optJSONArray("events")
-            val sb = StringBuilder("Payment request terbaru\n")
-            if (r.ok && arr != null && arr.length() > 0) {
-                for (i in 0 until arr.length()) {
-                    val e = arr.getJSONObject(i)
-                    sb.append("\n").append(e.optString("invoice"))
-                        .append("\nNominal: ").append(rupiah(e.optLong("amount")))
-                        .append(" · Total: ").append(rupiah(e.optLong("total")))
-                        .append("\nMerchant: ").append(e.optString("merchant"))
-                        .append(" · ").append(e.optString("method_name"))
-                        .append("\nStatus: ").append(e.optString("status"))
-                        .append("\nCheckout: ").append(e.optString("pay_url")).append("\n")
-                }
-            } else if (r.ok) sb.append("Belum ada payment request.")
-            else sb.append(Api.message(r))
-            runOnUiThread { out.setTextColor(if (r.ok) INK else RED); out.text = sb.toString() }
+            val good = r.ok && (!j.has("ok") || j.optBoolean("ok"))
+            val msg = if (good) okMsg(j) else if (r.ok) j.optString("error", "Gagal mengirim") else Api.message(r)
+            runOnUiThread { out.setTextColor(if (good) OK else RED); out.text = msg }
         }.start()
     }
 
@@ -1272,6 +1261,10 @@ class MainActivity : Activity() {
                 val j = r.json()
                 val sb = StringBuilder()
                 sb.append("Server ${j.optString("base")} · v${j.optString("version")}\n")
+                val sc = j.optJSONObject("secret")
+                if (sc != null) sb.append("Secret: ").append(if (sc.optString("source") == "app") "dibuat dari app (${sc.optString("prefix")}…)" else "dari env server").append("\n")
+                val tgi = j.optJSONObject("telegram")
+                if (tgi != null) sb.append("Telegram: ").append(if (tgi.optBoolean("enabled")) "aktif ke ${tgi.optString("chat_id")}" else "nonaktif").append("\n")
                 val qs = j.optJSONArray("owner_qris")
                 if (qs != null) for (i in 0 until qs.length()) {
                     val q = qs.getJSONObject(i)
@@ -1283,10 +1276,7 @@ class MainActivity : Activity() {
                 val us = j.optJSONObject("users")
                 if (us != null) sb.append("Pengguna: ${us.optInt("total")} · aktif ${us.optInt("active")} · perangkat online ${us.optInt("devices_online")}\n")
                 val um = j.optJSONArray("unmatched")
-                sb.append("Pembayaran tak cocok terakhir: ${um?.length() ?: 0}\n")
-                val nt = j.optJSONObject("notifications")
-                if (nt != null) sb.append("Telegram: ${if (nt.optBoolean("telegram_configured")) "terkonfigurasi" else "belum dikonfigurasi"} · event tersimpan ${nt.optInt("app_events")}\n")
-                sb.append("Secret pemilik: ${if (j.optBoolean("owner_secret")) "sudah dibuat" else "belum dibuat"}")
+                sb.append("Pembayaran tak cocok terakhir: ${um?.length() ?: 0}")
                 msg = sb.toString()
             } else if (r.code == 403) {
                 msg = "Kunci ini bukan Secret pemilik. Isi Secret di Pengaturan > Server (mode manual)."
