@@ -30,12 +30,12 @@ object Api {
         return if (scheme != null && authority != null) "$scheme://$authority" else null
     }
 
-    fun call(method: String, url: String, key: String? = null, body: JSONObject? = null): Res {
+    fun call(method: String, url: String, key: String? = null, body: JSONObject? = null, readMs: Int = 10000): Res {
         return try {
             val c = URL(url).openConnection() as HttpURLConnection
             c.requestMethod = method
             c.connectTimeout = 8000
-            c.readTimeout = 10000
+            c.readTimeout = readMs
             c.setRequestProperty("Accept", "application/json")
             if (key != null) c.setRequestProperty("X-Secret", key)
             val payload: String? = body?.toString() ?: if (method == "POST") "{}" else null
