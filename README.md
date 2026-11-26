@@ -10,7 +10,7 @@ Aplikasi yang membaca notifikasi pembayaran masuk (DANA Bisnis, GoPay Merchant, 
 Mode manual (pemilik/server sendiri): isi **Alamat server** dan **Kunci (Secret)** di bagian Server, lalu **Tes koneksi**. Server bawaan: `https://pay.emypedia.my.id`.
 
 ## Build (GitHub Actions)
-Push ke GitHub; workflow `Build Emy Cash APK` membuat `EmyCash.apk` (artifact) dan, untuk branch `main`/`master`, memperbarui rilis `latest`. Tautan tetap: `https://github.com/AKUN/REPO/releases/latest/download/EmyCash.apk`. Pasang tautan itu sebagai `APK_URL` di server, atau unggah APK dengan `deploy/unggah-apk.sh` (proyek server).
+Push ke GitHub; workflow `Build Emy Cash APK` membuat `EmyCash.apk` (artifact) dan, untuk branch `main`/`master`, memperbarui rilis `latest`. Tautan tetap: `https://github.com/praditiyaa77-ux/Emy-Cash/releases/latest/download/EmyCash.apk`. Pasang tautan itu sebagai `APK_URL` di server, atau unggah APK dengan `deploy/unggah-apk.sh` (proyek server).
 
 **Tanda tangan tetap (disarankan).** Tanpa keystore, tiap build memakai kunci debug yang berbeda sehingga pembaruan di atas versi lama gagal ("aplikasi tidak terpasang"). Jalankan `tools/buat-keystore.sh` sekali, isi secret `KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, dan simpan cadangan `emycash.jks`.
 
@@ -32,10 +32,8 @@ Catatan: perubahan ini ditulis tanpa compiler lokal; bila build gagal, kirim log
 - Naikkan versi: `versionCode 3`, `versionName 1.2`. Unggah APK user ke server dengan angka sama: `bash deploy/unggah-apk.sh EmyCash.apk https://pay.emypedia.my.id 1.2 3`.
 - Catatan: kode Kotlin baru ditulis tanpa compiler lokal. Kalau build gagal, kirim log error dari GitHub Actions.
 
-
-## v1.3: Emy Cash Dev
-- Panel Dev dapat mengambil daftar payment request terbaru dari gateway.
-- Selama Emy Cash Dev terbuka, aplikasi memeriksa event secara berkala dan menampilkan notifikasi Android untuk payment request baru.
-- Tombol **Generate / recreate Secret** membuat Secret pemilik baru, menyimpannya otomatis pada perangkat ini, dan menampilkan plaintext satu kali untuk dicadangkan.
-- Notifikasi saat aplikasi tertutup dikirim melalui konfigurasi Telegram server-side; polling aplikasi sendiri hanya aktif saat aplikasi terbuka.
-- Versi Android: `versionCode 4`, `versionName 1.3`.
+## v1.3: permintaan bayar dan Secret otomatis
+- **Permintaan bayar.** Selama Notification Access aktif, app mengambil order baru dari server (`GET /app/events`, long-poll) dan menampilkan notifikasi berisi nominal, merchant, invoice, dan ref, plus entri "Menunggu bayar" di riwayat. Matikan di Pengaturan > Permintaan bayar. Telegram diatur di dashboard; bila belum aktif di server, app meneruskan lewat Telegram miliknya (Pengaturan > Telegram).
+- **Edisi dev: Secret pemilik.** Tab Dev > "Buat atau buat ulang Secret" membuat Secret baru di server dan menyimpannya otomatis di app (kolom Secret di Pengaturan ikut terisi). Ketuk hasilnya untuk menyalin.
+- **Edisi dev: Telegram pemilik.** Isi bot token dan chat ID, lalu "Simpan dan aktifkan" dan "Kirim pesan tes". Dipakai untuk order langganan layanan.
+- Unduh: https://github.com/praditiyaa77-ux/Emy-Cash/releases/tag/latest
