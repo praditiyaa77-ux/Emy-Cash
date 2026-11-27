@@ -37,15 +37,18 @@ import java.net.URL
 import java.util.Calendar
 
 class MainActivity : Activity() {
-    private val BG = Color.WHITE
-    private val SURFACE = Color.parseColor("#F5F7FA")
-    private val INK = Color.parseColor("#0E1B2C")
-    private val MUTED = Color.parseColor("#667085")
-    private val FAINT = Color.parseColor("#98A2B3")
-    private val LINE = Color.parseColor("#E6E9EE")
-    private val OK = Color.parseColor("#0A7D55")
-    private val AMBER = Color.parseColor("#B26A00")
-    private val RED = Color.parseColor("#B42318")
+    // Palet sama dengan web: dark bento, lime untuk aksi utama dan "lunas", amber untuk menunggu
+    private val BG = Color.parseColor("#0A0A0E")
+    private val SURFACE = Color.parseColor("#13131A")
+    private val SURFACE2 = Color.parseColor("#1B1B25")
+    private val INK = Color.parseColor("#F5F4EF")
+    private val MUTED = Color.parseColor("#9A99AD")
+    private val FAINT = Color.parseColor("#6D6C82")
+    private val LINE = Color.parseColor("#2F2F42")
+    private val LIME = Brand.LIME
+    private val OK = LIME
+    private val AMBER = Color.parseColor("#FFB93D")
+    private val RED = Color.parseColor("#FF6B7D")
 
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
@@ -88,7 +91,7 @@ class MainActivity : Activity() {
     private fun rounded(color: Int, r: Int, stroke: Int? = null) = GradientDrawable().apply {
         setColor(color)
         cornerRadius = dp(r).toFloat()
-        if (stroke != null) setStroke(dp(1), stroke)
+        if (stroke != null) setStroke(dp(2), stroke)
     }
 
     private fun tv(t: String, sp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -102,6 +105,34 @@ class MainActivity : Activity() {
 
     private fun lp(top: Int = 0, w: Int = ViewGroup.LayoutParams.MATCH_PARENT) =
         LinearLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(top) }
+
+    private fun heavy(t: TextView): TextView { t.typeface = Typeface.create("sans-serif-black", Typeface.NORMAL); return t }
+
+    // Margin kartu bento
+    private fun cardLp(top: Int = 6) =
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { setMargins(dp(14), dp(top), dp(14), dp(6)) }
+
+    // Latar neo-brutalist: tile berwarna dengan bayangan keras di kanan bawah; ditekan = tile menutup bayangan
+    private fun brutalBg(fill: Int, shadow: Int, r: Int, border: Int? = null): android.graphics.drawable.Drawable {
+        val off = dp(3)
+        fun layered(pressed: Boolean): android.graphics.drawable.LayerDrawable {
+            val ld = android.graphics.drawable.LayerDrawable(arrayOf<android.graphics.drawable.Drawable>(rounded(shadow, r), rounded(fill, r, border)))
+            ld.setLayerInset(0, off, off, 0, 0)
+            if (pressed) ld.setLayerInset(1, off, off, 0, 0) else ld.setLayerInset(1, 0, 0, off, off)
+            return ld
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), layered(true))
+            addState(intArrayOf(), layered(false))
+        }
+    }
+
+    private fun Switch.brand() {
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        thumbTintList = android.content.res.ColorStateList(states, intArrayOf(BG, MUTED))
+        trackTintList = android.content.res.ColorStateList(states, intArrayOf(LIME, SURFACE2))
+    }
 
     private fun divider() = View(this).apply { setBackgroundColor(LINE) }
     private fun divLp(top: Int = 0, bottom: Int = 0) =
@@ -125,14 +156,26 @@ class MainActivity : Activity() {
             .setInterpolator(DecelerateInterpolator()).start()
     }
 
-    private fun wallet(label: String, color: Int) = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        addView(View(this@MainActivity).apply { background = rounded(color, 2) }, LinearLayout.LayoutParams(dp(8), dp(8)))
-        addView(tv(label, 13f, INK, true).apply { setPadding(dp(8), 0, 0, 0) })
+    // Ikon aplikasi asli (atau lencana berwarna merek bila belum terpasang), sudut membulat
+    private fun brandIcon(pkg: String?, method: String?, sizeDp: Int) = ImageView(this).apply {
+        setImageBitmap(Brand.icon(this@MainActivity, pkg, method, dp(sizeDp)))
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(v: View, o: android.graphics.Outline) { o.setRoundRect(0, 0, v.width, v.height, v.width * 0.28f) }
+        }
+        clipToOutline = true
     }
 
-    private fun status(label: String, color: Int, pulse: Boolean = false) = tv("\u25CF  $label", 13f, color, true).apply {
+    private fun wallet(label: String, color: Int, pkg: String? = null, method: String? = null) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(brandIcon(pkg, method, 36), LinearLayout.LayoutParams(dp(36), dp(36)))
+        addView(tv(label, 14f, color, true).apply { setPadding(dp(10), 0, 0, 0) })
+    }
+
+    private fun status(label: String, color: Int, pulse: Boolean = false) = tv(label, 13f, color, true).apply {
+        setPadding(dp(12), dp(5), dp(12), dp(5))
+        background = rounded(Color.argb(40, Color.red(color), Color.green(color), Color.blue(color)), 99)
         if (pulse) {
             val anim = ObjectAnimator.ofFloat(this, "alpha", 1f, 0.35f).apply {
                 duration = 800; repeatCount = ObjectAnimator.INFINITE; repeatMode = ObjectAnimator.REVERSE; start()
@@ -144,38 +187,39 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun button(label: String, filled: Boolean, textColor: Int = if (filled) Color.WHITE else INK, onClick: () -> Unit) =
+    private fun button(label: String, filled: Boolean, textColor: Int = if (filled) BG else INK, onClick: () -> Unit) =
         Button(this).apply {
             text = label
             transformationMethod = null
             stateListAnimator = null
-            minHeight = dp(48)
-            minimumHeight = dp(48)
+            minHeight = dp(50)
+            minimumHeight = dp(50)
             setTextColor(textColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            background = if (filled) rounded(INK, 6) else rounded(BG, 6, LINE)
-            pressable()
+            if (filled) {
+                background = brutalBg(LIME, INK, 14)
+            } else {
+                background = rounded(Color.TRANSPARENT, 14, LINE)
+                pressable()
+            }
             setOnClickListener { onClick() }
         }
 
-    private fun walletOf(pkg: String, title: String, text: String): Pair<String, Int> {
-        if (pkg.startsWith("com.whatsapp")) return Pair("WhatsApp", Color.parseColor("#25D366"))
+    private fun methodFor(pkg: String, title: String, text: String): String? {
         if (pkg == "emy.request") {
             val t = "$title $text".lowercase()
-            return when {
-                "dana" in t -> Pair("DANA", Color.parseColor("#118EEA"))
-                "shopeepay" in t -> Pair("ShopeePay", Color.parseColor("#EE4D2D"))
-                "gopay" in t -> Pair("GoPay", Color.parseColor("#00AA13"))
-                else -> Pair("Permintaan bayar", FAINT)
-            }
+            return when { "dana" in t -> "dana"; "shopeepay" in t -> "shopeepay"; "gopay" in t -> "gopay"; else -> null }
         }
-        return when (detectMethod(pkg, title, text)) {
-            "dana" -> Pair("DANA", Color.parseColor("#118EEA"))
-            "shopeepay" -> Pair("ShopeePay", Color.parseColor("#EE4D2D"))
-            "gopay" -> Pair("GoPay", Color.parseColor("#00AA13"))
-            else -> Pair(pkg.substringAfterLast('.'), FAINT)
-        }
+        return detectMethod(pkg, title, text)
+    }
+
+    // Nama dan warna sesuai aplikasinya: ShopeePay oranye, DANA biru, GoPay hijau
+    private fun walletOf(pkg: String, title: String, text: String): Pair<String, Int> {
+        if (pkg.startsWith("com.whatsapp")) return Pair("WhatsApp", Color.parseColor("#25D366"))
+        val m = methodFor(pkg, title, text)
+        return if (m != null) Pair(methodName(m), Brand.color(m))
+        else Pair(if (pkg == "emy.request") "Permintaan bayar" else pkg.substringAfterLast('.'), FAINT)
     }
 
     private fun listenerOn(): Boolean {
@@ -195,10 +239,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.statusBarColor = BG
+        window.navigationBarColor = BG
+        Cfg.autoFill(this)   // isi otomatis package dompet yang terpasang
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -218,11 +261,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(14), dp(20), dp(14))
         }
-        header.addView(tv("Emy Cash", 20f, INK, true))
+        val brandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        brandRow.addView(ImageView(this).apply { setImageBitmap(Brand.logo(dp(44))) }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        brandRow.addView(heavy(tv(getString(R.string.app_name), 21f, INK, true)).apply { setPadding(dp(10), 0, 0, 0) })
+        header.addView(brandRow, lp())
         val statusRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(dp(12), dp(8), dp(14), dp(8))
+            background = rounded(SURFACE, 99, LINE)
             setOnClickListener {
                 if (!listenerOn()) openAccess() else { Cfg.rebind(this@MainActivity); toast("Menyambungkan ulang…") }
             }
@@ -231,21 +278,21 @@ class MainActivity : Activity() {
         statusRow.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)))
         statusText = tv("", 13f, MUTED).apply { setPadding(dp(8), 0, 0, 0) }
         statusRow.addView(statusText)
-        header.addView(statusRow, lp(4, ViewGroup.LayoutParams.WRAP_CONTENT))
+        header.addView(statusRow, lp(12, ViewGroup.LayoutParams.WRAP_CONTENT))
         acctLine = tv("", 12f, MUTED)
         header.addView(acctLine, lp(2))
         updateLine = tv("", 12f, AMBER, true).apply { visibility = View.GONE }
         header.addView(updateLine, lp(6))
         root.addView(header, lp())
-        root.addView(divider(), divLp())
 
         // ---- halaman riwayat ----
-        todayText = tv("Rp 0", 28f, INK, true)
+        todayText = heavy(tv("Rp 0", 30f, INK, true))
         todaySub = tv("Belum ada pembayaran lunas hari ini", 13f, MUTED)
         val summary = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(18), dp(20), dp(16))
-            addView(tv("Lunas hari ini", 13f, MUTED))
+            setPadding(dp(20), dp(18), dp(26), dp(24))
+            background = brutalBg(SURFACE, LIME, 24, LIME)
+            addView(tv("Lunas hari ini", 14f, MUTED))
             addView(todayText, lp(6))
             addView(todaySub, lp(4))
         }
@@ -259,9 +306,8 @@ class MainActivity : Activity() {
         }
         val histRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(summary, lp())
-            addView(divider(), divLp())
-            addView(listBox, lp())
+            addView(summary, cardLp(14))
+            addView(listBox, lp(8))
             addView(histActions, lp())
         }
         historyPage = ScrollView(this).apply { addView(histRoot); isVerticalScrollBarEnabled = false }
@@ -278,27 +324,27 @@ class MainActivity : Activity() {
                 setSingleLine()
                 inputType = if (pw) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-                setPadding(dp(12), dp(12), dp(12), dp(12))
-                background = rounded(BG, 6, LINE)
-                setOnFocusChangeListener { v, f -> (v.background as GradientDrawable).setStroke(dp(1), if (f) INK else LINE) }
+                setPadding(dp(14), dp(13), dp(14), dp(13))
+                background = rounded(SURFACE2, 14, LINE)
+                setOnFocusChangeListener { v, f -> (v.background as GradientDrawable).setStroke(dp(2), if (f) LIME else LINE) }
             }
             fields[key] = e
             box.addView(e, lp(6))
         }
         fun section(title: String, desc: String? = null): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(20), dp(20), dp(20))
-            addView(tv(title, 15f, INK, true))
-            if (desc != null) addView(tv(desc, 13f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(4))
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = rounded(SURFACE, 24, LINE)
+            addView(heavy(tv(title, 17f, INK, true)))
+            if (desc != null) addView(tv(desc, 13f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(6))
         }
 
-        val setBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val setBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, dp(8)) }
 
         val s0 = section("Akun Emy Cash")
         acctBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         s0.addView(acctBox, lp(4))
-        setBox.addView(s0, lp())
-        setBox.addView(divider(), divLp())
+        setBox.addView(s0, cardLp())
 
         val s1 = section("Izin notifikasi", "Emy Cash perlu Notification Access untuk membaca notifikasi pembayaran. Kalau status di atas bukan hijau, sambungkan ulang.")
         s1.addView(button("Buka Notification Access", true) { openAccess() }, lp(12))
@@ -306,8 +352,7 @@ class MainActivity : Activity() {
         s1.addView(button("Izinkan berjalan di latar belakang", false) {
             try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (e: Exception) { toast("Tidak tersedia di perangkat ini") }
         }, lp(8))
-        setBox.addView(s1, lp())
-        setBox.addView(divider(), divLp())
+        setBox.addView(s1, cardLp())
 
         val s2 = section("Server (mode manual)", "Terisi otomatis saat Anda masuk dengan akun. Ubah hanya untuk server sendiri atau mode pemilik dengan Secret. Cukup isi alamat server, /notif ditambahkan otomatis.")
         field(s2, "Alamat server", "wh", ph = Cfg.DEFAULT_SERVER)
@@ -321,8 +366,7 @@ class MainActivity : Activity() {
                 try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.scheme + "://" + u.authority + "/"))) } catch (e: Exception) {}
             } else toast("Isi alamat server dulu")
         }, lp(8))
-        setBox.addView(s2, lp())
-        setBox.addView(divider(), divLp())
+        setBox.addView(s2, cardLp())
 
         val s3 = section("Deteksi pembayaran")
         val wideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -333,14 +377,23 @@ class MainActivity : Activity() {
         }
         wideRow.addView(wideTxt, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         wideRow.addView(Switch(this).apply {
+            brand()
             isChecked = Cfg.wide(this@MainActivity)
             setOnCheckedChangeListener { _, on -> p.edit().putBoolean("wide", on).apply() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(12) })
         s3.addView(wideRow, lp(12))
         s3.addView(tv("Package tambahan (pisah koma, * di akhir = semua berawalan itu). Package yang terdeteksi otomatis ikut tercatat di sini.", 12f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(16))
         field(s3, "Package", "pkgsx")
-        setBox.addView(s3, lp())
-        setBox.addView(divider(), divLp())
+        s3.addView(button("Deteksi aplikasi dompet otomatis", false) {
+            val added = Cfg.autoFill(this)
+            fields["pkgsx"]?.setText(p.getString("pkgsx", ""))
+            renderDetected()
+            toast(if (added) "Package ditambahkan otomatis" else "Tidak ada package baru")
+        }, lp(12))
+        detectedBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        s3.addView(detectedBox, lp(8))
+        renderDetected()
+        setBox.addView(s3, cardLp())
 
         val sR = section("Permintaan bayar")
         val reqRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -350,12 +403,12 @@ class MainActivity : Activity() {
             addView(tv("Setiap order baru dari API muncul di sini dengan invoice, nominal, dan merchant. Telegram diatur di dashboard; bila belum diatur di sana, app meneruskan lewat Telegram di bawah.", 12f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(2))
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         reqRow.addView(Switch(this).apply {
+            brand()
             isChecked = p.getBoolean("req", true)
             setOnCheckedChangeListener { _, on -> p.edit().putBoolean("req", on).apply() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(12) })
         sR.addView(reqRow, lp(12))
-        setBox.addView(sR, lp())
-        setBox.addView(divider(), divLp())
+        setBox.addView(sR, cardLp())
 
         val s4 = section("Telegram (opsional)")
         field(s4, "Bot token", "tok", pw = true)
@@ -367,18 +420,18 @@ class MainActivity : Activity() {
             addView(tv("Nonaktif secara bawaan demi privasi. Pesan chat tidak pernah dihitung sebagai pembayaran.", 12f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(2))
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         waRow.addView(Switch(this).apply {
+            brand()
             isChecked = p.getBoolean("wa", false)
             setOnCheckedChangeListener { _, on -> p.edit().putBoolean("wa", on).apply() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(12) })
         s4.addView(waRow, lp(16))
-        setBox.addView(s4, lp())
-        setBox.addView(divider(), divLp())
+        setBox.addView(s4, cardLp())
 
         val s5 = section("Tentang")
         s5.addView(tv("Emy Cash ${versionInfo().first}", 13f, MUTED), lp(6))
         s5.addView(button("Cek pembaruan", false) { toast("Memeriksa…"); refreshStatus(true) }, lp(12))
         s5.addView(button("Buka situs Emy Cash", false) { openUrl(serverBase() + "/") }, lp(8))
-        setBox.addView(s5, lp())
+        setBox.addView(s5, cardLp())
 
         val saveWrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), 0, dp(20), dp(28)) }
         saveWrap.addView(button("Simpan pengaturan", true) {
@@ -407,23 +460,25 @@ class MainActivity : Activity() {
         val content = FrameLayout(this)
         for (pg in pages) content.addView(pg, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(divider(), divLp())
 
-        navBar = FrameLayout(this)
+        navBar = FrameLayout(this).apply {
+            background = rounded(SURFACE, 26, LINE)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }
         val navRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for ((idx, label) in names.withIndex()) {
             val item = tv(label, 14f, MUTED, true).apply {
                 gravity = Gravity.CENTER
-                setPadding(0, dp(16), 0, dp(16))
+                setPadding(0, dp(12), 0, dp(12))
                 setOnClickListener { selectTab(idx, true) }
             }
             navItems.add(item)
-            navRow.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            navRow.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(2), 0, dp(2), 0) })
         }
-        navIndicator = View(this).apply { setBackgroundColor(INK) }
+        navIndicator = View(this).apply { visibility = View.GONE }   // indikator lama tidak dipakai; item aktif diberi latar lime
         navBar.addView(navRow, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        navBar.addView(navIndicator, FrameLayout.LayoutParams(0, dp(2)))
-        root.addView(navBar, lp())
+        navBar.addView(navIndicator, FrameLayout.LayoutParams(0, 0))
+        root.addView(navBar, lp().apply { setMargins(dp(14), dp(6), dp(14), dp(12)) })
 
         setContentView(root)
         renderAccount()
@@ -457,7 +512,10 @@ class MainActivity : Activity() {
         val target = (i * navBar.width / pages.size).toFloat()
         if (animate) navIndicator.animate().translationX(target).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
         else navIndicator.translationX = target
-        for ((k, nv) in navItems.withIndex()) nv.setTextColor(if (k == i) INK else MUTED)
+        for ((k, nv) in navItems.withIndex()) {
+            nv.setTextColor(if (k == i) BG else MUTED)
+            nv.background = if (k == i) rounded(LIME, 20) else null
+        }
         val cur = pages[i]
         if (cur === premiumPage) { if (payOrder == null) loadPlans() else renderPremium() }
         if (cur === devPage) renderCoverage()
@@ -526,9 +584,9 @@ class MainActivity : Activity() {
             email -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
             else -> InputType.TYPE_CLASS_TEXT
         }
-        setPadding(dp(12), dp(12), dp(12), dp(12))
-        background = rounded(BG, 6, LINE)
-        setOnFocusChangeListener { v, f -> (v.background as GradientDrawable).setStroke(dp(1), if (f) INK else LINE) }
+        setPadding(dp(14), dp(13), dp(14), dp(13))
+        background = rounded(SURFACE2, 14, LINE)
+        setOnFocusChangeListener { v, f -> (v.background as GradientDrawable).setStroke(dp(2), if (f) LIME else LINE) }
     }
 
     private fun renderAccount() {
@@ -667,9 +725,37 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    private var detectedBox: LinearLayout? = null
+
+    // Aplikasi dompet yang terpasang di HP ini, lengkap dengan ikon dan warna mereknya
+    private fun renderDetected() {
+        val box = detectedBox ?: return
+        box.removeAllViews()
+        val apps = Brand.installed(this)
+        if (apps.isEmpty()) {
+            box.addView(tv("Belum ada aplikasi DANA, ShopeePay, atau GoPay yang terdeteksi di HP ini. Package tetap terisi otomatis begitu notifikasi pembayaran pertama masuk.", 12f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp())
+            return
+        }
+        box.addView(tv("Terdeteksi di HP ini", 12f, MUTED), lp())
+        for (a in apps) {
+            val m = Brand.methodOfPkg(a.packageName)
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            row.addView(brandIcon(a.packageName, m, 34), LinearLayout.LayoutParams(dp(34), dp(34)))
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+            col.addView(tv(Brand.label(this, a.packageName), 14f, Brand.color(m), true))
+            col.addView(tv(a.packageName, 11f, FAINT), lp(2))
+            row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            box.addView(row, lp(10))
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         lastSig = ""
+        if (Cfg.autoFill(this)) {
+            fields["pkgsx"]?.setText(Cfg.prefs(this).getString("pkgsx", ""))
+            renderDetected()
+        }
         // izin aktif tetapi listener tidak tersambung (sering terjadi setelah update/hemat baterai): sambungkan ulang
         if (listenerOn() && !NotifService.connected) Cfg.rebind(this)
         ticker.run()
@@ -750,20 +836,21 @@ class MainActivity : Activity() {
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(16), dp(20), dp(16))
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = rounded(SURFACE, 22, LINE)
             }
             val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            top.addView(wallet(wl, wc), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(wallet(wl, wc, pkg, methodFor(pkg, title, text)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             top.addView(tv(o.optString("t"), 12f, FAINT))
             row.addView(top, lp())
 
             if (amount != null) {
                 val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                line.addView(tv(rupiah(amount), 22f, if (st == "paid") OK else INK, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                line.addView(heavy(tv(rupiah(amount), 24f, if (st == "paid") OK else INK, true)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 if (chip != null) line.addView(status(chip.first, chip.second, chip.third))
                 row.addView(line, lp(8))
             } else if (chip != null) {
-                row.addView(status(chip.first, chip.second, chip.third), lp(8))
+                row.addView(status(chip.first, chip.second, chip.third), lp(10, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             if (inv.isNotEmpty()) {
                 row.addView(tv("Invoice  $inv", 13f, INK, true).apply {
@@ -797,8 +884,7 @@ class MainActivity : Activity() {
                     Toast.makeText(this@MainActivity, "Dipantau: $pkg. Bayar lagi untuk mencoba.", Toast.LENGTH_LONG).show()
                 }, lp(12))
             }
-            listBox.addView(row, lp())
-            listBox.addView(divider(), divLp())
+            listBox.addView(row, cardLp())
 
             // animasi hanya untuk entri baru (bukan saat render ulang tiap 3 detik)
             if (!firstRender && rendered.add(id)) { fadeIn(row, animIdx * 40); animIdx++ } else rendered.add(id)
@@ -819,12 +905,7 @@ class MainActivity : Activity() {
     private var payBusy = false
     private var polling = false
 
-    private fun walletColor(m: String): Int = when (m) {
-        "dana" -> Color.parseColor("#118EEA")
-        "shopeepay" -> Color.parseColor("#EE4D2D")
-        "gopay" -> Color.parseColor("#00AA13")
-        else -> FAINT
-    }
+    private fun walletColor(m: String): Int = Brand.color(m)
 
     private fun fmtNum(n: Long): String = String.format(Locale.US, "%,d", n).replace(',', '.')
 
@@ -834,7 +915,7 @@ class MainActivity : Activity() {
         premBox.addView(tv(t, 13f, c).apply { setPadding(dp(20), dp(8), dp(20), dp(8)); setLineSpacing(0f, 1.15f) }, lp())
     }
 
-    private fun premButton(label: String, filled: Boolean, color: Int = if (filled) Color.WHITE else INK, onClick: () -> Unit) {
+    private fun premButton(label: String, filled: Boolean, color: Int = if (filled) BG else INK, onClick: () -> Unit) {
         premBox.addView(button(label, filled, color, onClick), lp(8).apply { leftMargin = dp(20); rightMargin = dp(20) })
     }
 
@@ -865,7 +946,7 @@ class MainActivity : Activity() {
     private fun renderPremium() {
         premBox.removeAllViews()
         val head = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(8)) }
-        head.addView(tv("Paket Premium", 20f, INK, true))
+        head.addView(heavy(tv("Paket Premium", 22f, INK, true)))
         premBox.addView(head, lp())
 
         val p = Cfg.prefs(this)
@@ -897,20 +978,18 @@ class MainActivity : Activity() {
             else "Belum ada paket aktif. Pilih paket, lalu pilih QRIS merchant untuk membayar.",
             if (active) OK else AMBER
         )
-        premBox.addView(divider(), divLp(8))
         val arr = pj.optJSONArray("plans") ?: JSONArray()
         for (i in 0 until arr.length()) {
             val pl = arr.getJSONObject(i)
-            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(16), dp(20), dp(16)) }
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(16), dp(18), dp(16)); background = rounded(SURFACE, 22, LINE) }
             row.pressable()
             val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            top.addView(tv(pl.optString("name"), 15f, INK, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            top.addView(tv(rupiah(pl.optLong("price")), 15f, INK, true))
+            top.addView(heavy(tv(pl.optString("name"), 17f, INK, true)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(heavy(tv(rupiah(pl.optLong("price")), 17f, LIME, true)))
             row.addView(top, lp())
             row.addView(tv("${pl.optInt("merchants")} merchant · ${fmtNum(pl.optLong("ordersPerDay"))} order/hari · riwayat ${pl.optInt("historyDays")} hari", 12f, MUTED), lp(4))
             row.setOnClickListener { selPlan = pl; renderPremium() }
-            premBox.addView(row, lp())
-            premBox.addView(divider(), divLp())
+            premBox.addView(row, cardLp())
         }
         premButton("Muat ulang", false) { loadPlans(); toast("Memuat…") }
     }
@@ -927,9 +1006,9 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(16), dp(14), dp(16), dp(14))
-                background = rounded(BG, 6, LINE)
+                background = rounded(SURFACE, 20, LINE)
             }
-            row.addView(wallet(m.optString("name"), walletColor(code)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(wallet(m.optString("name"), walletColor(code), null, code), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(tv(if (payBusy) "…" else "Bayar", 13f, MUTED))
             row.pressable()
             row.setOnClickListener { startPay(pl.optString("id"), code) }
@@ -985,9 +1064,9 @@ class MainActivity : Activity() {
             }
         }
         premBox.addView(tv("Bayar dengan $name", 16f, INK, true).apply { setPadding(dp(20), dp(4), dp(20), 0) }, lp())
-        premBox.addView(tv(rupiah(total), 28f, INK, true).apply { setPadding(dp(20), dp(10), dp(20), 0) }, lp())
+        premBox.addView(heavy(tv(rupiah(total), 32f, INK, true)).apply { setPadding(dp(20), dp(10), dp(20), 0) }, lp())
         premNote("Scan QR di bawah dengan aplikasi ${name} atau e-wallet lain yang mendukung QRIS, lalu bayar sesuai nominal tepat di atas. Paket aktif otomatis setelah pembayaran terbaca.", MUTED)
-        val box = FrameLayout(this).apply { background = rounded(Color.WHITE, 6, LINE) }
+        val box = FrameLayout(this).apply { background = rounded(Color.WHITE, 24, LINE) }
         val bmp = qrBmp
         if (bmp != null) {
             box.addView(ImageView(this).apply {
@@ -1053,9 +1132,10 @@ class MainActivity : Activity() {
 
     private fun secBox(title: String, desc: String? = null) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(20), dp(20), dp(20), dp(20))
-        addView(tv(title, 15f, INK, true))
-        if (desc != null) addView(tv(desc, 13f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(4))
+        setPadding(dp(18), dp(18), dp(18), dp(18))
+        background = rounded(SURFACE, 24, LINE)
+        addView(heavy(tv(title, 17f, INK, true)))
+        if (desc != null) addView(tv(desc, 13f, MUTED).apply { setLineSpacing(0f, 1.15f) }, lp(6))
     }
 
     private fun stLabel(st: String): String = when (st) {
@@ -1070,15 +1150,14 @@ class MainActivity : Activity() {
     }
 
     private fun buildDevPage(): ScrollView {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, dp(8)) }
 
         val s1 = secBox("Cakupan payment gateway", "Semua dompet yang dikonfirmasi otomatis (GoPay, DANA, ShopeePay), pola package yang dipantau, dan notifikasi terakhir di perangkat ini.")
         val cover = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         devCover = cover
         s1.addView(cover, lp(8))
         s1.addView(button("Segarkan", false) { renderCoverage() }, lp(8))
-        box.addView(s1, lp())
-        box.addView(divider(), divLp())
+        box.addView(s1, cardLp())
 
         val s2 = secBox("Uji parser (lokal)", "Hanya diproses di perangkat, tidak dikirim ke server, jadi aman dipakai saat ada order aktif.")
         val ePkg = editBox("Package", false)
@@ -1097,29 +1176,54 @@ class MainActivity : Activity() {
             runParserTest(ePkg.text.toString().trim(), eTi.text.toString(), eTx.text.toString(), out)
         }, lp(12))
         s2.addView(out, lp(10))
-        box.addView(s2, lp())
-        box.addView(divider(), divLp())
+        box.addView(s2, cardLp())
 
         val s3 = secBox("Server pemilik", "Butuh Secret pemilik (Pengaturan > Server, mode manual). Menampilkan QRIS developer, pesanan premium, dan pengguna.")
         val srvOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
         s3.addView(button("Muat info developer", true) { loadDevInfo(srvOut) }, lp(12))
         s3.addView(srvOut, lp(10))
-        box.addView(s3, lp())
-        box.addView(divider(), divLp())
+        box.addView(s3, cardLp())
 
-        val s6 = secBox("Secret pemilik", "Buat atau buat ulang Secret pemilik secara otomatis. Secret lama diganti dan yang baru tersimpan di app ini, tanpa perlu disalin.")
+        val s6 = secBox("Secret pemilik", "Buat atau buat ulang Secret pemilik otomatis. Hasilnya langsung tersimpan di app ini, tanpa perlu disalin.")
+        val secServer = editBox("Alamat server", false).apply {
+            hint = Cfg.DEFAULT_SERVER
+            setText(Api.base(Cfg.prefs(this@MainActivity).getString("wh", "") ?: "") ?: "")
+        }
+        val secCur = editBox("Secret saat ini (kosongkan bila server baru)", true).apply { setText(ownerKey()) }
         val secOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        s6.addView(secServer, lp(12))
+        s6.addView(secCur, lp(8))
         s6.addView(button("Buat atau buat ulang Secret", true) {
             android.app.AlertDialog.Builder(this@MainActivity)
                 .setTitle("Buat ulang Secret?")
                 .setMessage("Secret lama berhenti berlaku setelah 2 menit. Secret baru tersimpan otomatis di app ini. Skrip atau perangkat lain yang memakai Secret lama harus diperbarui.")
-                .setPositiveButton("Buat ulang") { _, _ -> rotateSecret(secOut) }
+                .setPositiveButton("Buat ulang") { _, _ -> rotateSecret(secServer.text.toString().trim(), secCur.text.toString().trim(), secOut, secCur) }
                 .setNegativeButton("Batal", null)
                 .show()
-        }, lp(12))
+        }, lp(14))
         s6.addView(secOut, lp(10))
-        box.addView(s6, lp())
-        box.addView(divider(), divLp())
+        s6.addView(tv("Tidak punya Secret yang berlaku? Masuk dengan akun yang ada di OWNER_EMAIL di tab Pengaturan, atau jalankan di server: node server.js --new-secret", 12f, FAINT).apply { setLineSpacing(0f, 1.15f) }, lp(10))
+        box.addView(s6, cardLp())
+
+        val s8 = secBox("Fee (biaya layanan)", "Persen yang ditambahkan ke nominal pembeli, maksimal 25%. Atur fee order langganan, fee bawaan pengguna baru, atau fee tiap pengguna.")
+        val feeOut = tv("", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }
+        fun num(h: String) = editBox(h, false).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL }
+        val feeOwner = num("Fee order langganan (%)")
+        val feeDef = num("Fee bawaan pengguna baru (%)")
+        val feeEmail = editBox("Email pengguna", false, true)
+        val feeUser = num("Fee pengguna (%)")
+        s8.addView(button("Muat fee saat ini", false) {
+            devCall("GET", "/app/dev/fee", null, feeOut) { j -> feeSummary(j, feeOwner, feeDef) }
+        }, lp(12))
+        s8.addView(feeOwner, lp(12))
+        s8.addView(button("Simpan fee langganan", true) { saveFee("owner", feeOwner.text.toString(), null, feeOut, feeOwner, feeDef) }, lp(10))
+        s8.addView(feeDef, lp(14))
+        s8.addView(button("Simpan fee bawaan", true) { saveFee("default", feeDef.text.toString(), null, feeOut, feeOwner, feeDef) }, lp(10))
+        s8.addView(feeEmail, lp(14))
+        s8.addView(feeUser, lp(8))
+        s8.addView(button("Simpan fee pengguna", true) { saveFee("user", feeUser.text.toString(), feeEmail.text.toString().trim(), feeOut, feeOwner, feeDef) }, lp(10))
+        s8.addView(feeOut, lp(12))
+        box.addView(s8, cardLp())
 
         val s7 = secBox("Telegram pemilik", "Kirim setiap permintaan bayar dan pembayaran lunas dari order layanan (langganan) ke Telegram. Token disimpan di server.")
         val tgTok = editBox("Bot token", true)
@@ -1137,14 +1241,13 @@ class MainActivity : Activity() {
             ownerTelegram("/app/dev/telegram-test", JSONObject(), tgOut) { _ -> "Pesan tes terkirim" }
         }, lp(8))
         s7.addView(tgOut, lp(10))
-        box.addView(s7, lp())
-        box.addView(divider(), divLp())
+        box.addView(s7, cardLp())
 
         val s4 = secBox("Build")
         val key = Cfg.prefs(this).getString("sec", "") ?: ""
         s4.addView(tv("Emy Cash ${versionInfo().first} (${versionInfo().second})\n${packageName}\nServer: ${serverBase()}\nKunci: ${if (key.length > 6) key.take(6) + "…" else if (key.isEmpty()) "belum ada" else "pendek"}", 13f, MUTED).apply { setLineSpacing(0f, 1.2f) }, lp(8))
         s4.addView(tv("Edisi dev terpasang terpisah dari edisi user. Matikan Notification Access salah satunya agar notifikasi tidak terkirim ganda.", 12f, AMBER).apply { setLineSpacing(0f, 1.15f) }, lp(10))
-        box.addView(s4, lp())
+        box.addView(s4, cardLp())
         box.addView(View(this), lp(24))
 
         return ScrollView(this).apply { addView(box); isVerticalScrollBarEnabled = false }
@@ -1169,13 +1272,12 @@ class MainActivity : Activity() {
             val on = Cfg.monitored(this, g[3])
             val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(10), 0, dp(10)) }
             val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            top.addView(wallet(g[1], walletColor(m)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(wallet(g[1], walletColor(m), g[3], m), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             top.addView(status(if (on) "Dipantau" else "Tidak dipantau", if (on) OK else RED))
             row.addView(top, lp())
             row.addView(tv("Package: ${g[2]}", 12f, MUTED), lp(4))
             row.addView(tv(if (n == 0) "Belum ada notifikasi pembayaran di riwayat" else "$n notifikasi · terakhir $lastT · ${stLabel(lastSt)}", 12f, MUTED), lp(2))
             box.addView(row, lp())
-            box.addView(divider(), divLp())
         }
     }
 
@@ -1194,61 +1296,109 @@ class MainActivity : Activity() {
         out.setTextColor(if (pay && mon) OK else AMBER)
     }
 
-    // Buat atau buat ulang Secret pemilik di server, lalu simpan otomatis di app ini
-    private fun rotateSecret(out: TextView) {
+    // Kunci pemilik: Secret hasil buat ulang (osec) bila ada, kalau tidak kunci utama (Secret manual atau kunci perangkat akun pemilik)
+    private fun ownerKey(): String {
         val p = Cfg.prefs(this)
-        val base = Api.base(p.getString("wh", "") ?: "")
-        if (base == null) { out.setTextColor(RED); out.text = "Isi alamat server di Pengaturan > Server dulu, lalu simpan."; return }
+        val o = p.getString("osec", "") ?: ""
+        return if (o.isNotBlank()) o else (p.getString("sec", "") ?: "")
+    }
+
+    private fun ownerFail(code: Int, r: Api.Res): String = when (code) {
+        401 -> "Kunci ditolak (HTTP 401). Isi Secret pemilik yang berlaku, masuk dengan akun OWNER_EMAIL, atau jalankan di server: node server.js --new-secret"
+        403 -> "Kunci ini bukan milik pemilik (HTTP 403). Masuk dengan akun yang ada di OWNER_EMAIL, atau isi Secret pemilik."
+        404 -> "Server belum mendukung fitur ini (HTTP 404). Perbarui gateway ke versi terbaru."
+        429 -> "Terlalu banyak percobaan, coba lagi beberapa menit lagi."
+        else -> Api.message(r)
+    }
+
+    // Buat atau buat ulang Secret pemilik di server, lalu simpan otomatis di app ini
+    private fun rotateSecret(addr: String, cur: String, out: TextView, curField: EditText) {
+        val p = Cfg.prefs(this)
+        val base = Api.base(addr) ?: Api.base(p.getString("wh", "") ?: "")
+        if (base == null) { out.setTextColor(RED); out.text = "Isi alamat server dulu, mis. ${Cfg.DEFAULT_SERVER}"; return }
         // server baru yang Secret-nya belum diganti masih memakai nilai bawaan
-        val auth = (p.getString("sec", "") ?: "").ifBlank { "ganti-ini" }
+        val auth = cur.ifBlank { ownerKey() }.ifBlank { "ganti-ini" }
+        val manual = (p.getString("email", "") ?: "").isEmpty()   // mode manual: Secret pemilik juga jadi kunci utama app
         out.setTextColor(MUTED); out.text = "Membuat Secret…"
         Thread {
             val r = Api.call("POST", "$base/app/dev/secret", auth, JSONObject())
             var ns = ""
-            val msg = when {
-                r.ok -> {
-                    ns = r.json().optString("secret")
-                    if (ns.isBlank()) "Server tidak mengirim Secret baru." else {
-                        p.edit().putString("sec", ns).apply()
-                        "Secret baru sudah tersimpan di app ini.\n$ns\nKetuk untuk menyalin."
-                    }
+            val msg = if (r.ok) {
+                ns = r.json().optString("secret")
+                if (ns.isBlank()) "Server tidak mengirim Secret baru." else {
+                    val e = p.edit().putString("osec", ns)
+                    if ((p.getString("wh", "") ?: "").isBlank()) e.putString("wh", "$base/notif")
+                    if (manual) e.putString("sec", ns)
+                    e.apply()
+                    "Secret baru sudah tersimpan di app ini.\n$ns\nKetuk untuk menyalin."
                 }
-                r.code == 401 -> "Secret saat ini ditolak. Isi Secret pemilik yang benar di Pengaturan > Server, lalu coba lagi."
-                r.code == 403 -> "Kunci ini bukan Secret pemilik."
-                r.code == 404 -> "Server belum mendukung fitur ini (HTTP 404). Perbarui gateway ke versi terbaru."
-                else -> Api.message(r)
-            }
+            } else ownerFail(r.code, r)
             runOnUiThread {
                 out.setTextColor(if (ns.isNotBlank()) OK else RED)
                 out.text = msg
                 if (ns.isNotBlank()) {
-                    fields["sec"]?.setText(ns)
+                    curField.setText(ns)
+                    if (manual) fields["sec"]?.setText(ns)
+                    fields["wh"]?.let { if (it.text.isNullOrBlank()) it.setText("$base/notif") }
                     out.setOnClickListener { copy(ns) }
                 }
             }
         }.start()
     }
 
-    private fun ownerTelegram(path: String, body: JSONObject, out: TextView, okMsg: (JSONObject) -> String) {
+    // Panggilan ke endpoint pemilik (/app/dev/*). onOk berjalan di thread UI.
+    private fun devCall(method: String, path: String, body: JSONObject?, out: TextView, onOk: (JSONObject) -> String) {
         val p = Cfg.prefs(this)
-        val key = p.getString("sec", "") ?: ""
+        val key = ownerKey()
         val base = Api.base(p.getString("wh", "") ?: "")
         if (key.isBlank() || base == null) {
-            out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server, lalu simpan."; return
+            out.setTextColor(RED); out.text = "Buat Secret di bagian Secret pemilik di atas, atau isi alamat server dan Secret di Pengaturan > Server."; return
         }
         out.setTextColor(MUTED); out.text = "Memproses…"
         Thread {
-            val r = Api.call("POST", "$base$path", key, body)
+            val r = Api.call(method, "$base$path", key, body)
             val j = r.json()
             val good = r.ok && (!j.has("ok") || j.optBoolean("ok"))
-            val msg = if (good) okMsg(j) else if (r.ok) j.optString("error", "Gagal mengirim") else Api.message(r)
-            runOnUiThread { out.setTextColor(if (good) OK else RED); out.text = msg }
+            runOnUiThread {
+                out.setTextColor(if (good) OK else RED)
+                out.text = if (good) onOk(j) else if (r.ok) j.optString("error", "Gagal") else ownerFail(r.code, r)
+            }
         }.start()
+    }
+
+    private fun ownerTelegram(path: String, body: JSONObject, out: TextView, okMsg: (JSONObject) -> String) =
+        devCall("POST", path, body, out, okMsg)
+
+    private fun fmtPct(v: Double) = if (v == Math.floor(v)) v.toLong().toString() else v.toString()
+
+    private fun feeSummary(j: JSONObject, a: EditText?, b: EditText?): String {
+        val o = j.optDouble("owner_fee_pct", 0.0)
+        val d = j.optDouble("default_fee_pct", 0.0)
+        a?.setText(fmtPct(o)); b?.setText(fmtPct(d))
+        val sb = StringBuilder("Fee langganan ${fmtPct(o)}%, bawaan pengguna baru ${fmtPct(d)}%")
+        val us = j.optJSONArray("users")
+        if (us != null && us.length() > 0) {
+            sb.append("\nPengguna terbaru:")
+            for (i in 0 until minOf(us.length(), 15)) {
+                val u = us.getJSONObject(i)
+                sb.append("\n${u.optString("email")}: ${fmtPct(u.optDouble("fee_pct", 0.0))}%")
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun saveFee(scope: String, value: String, email: String?, out: TextView, a: EditText, b: EditText) {
+        val f = value.trim().replace(',', '.').toDoubleOrNull()
+        if (f == null || f < 0 || f > 25) { out.setTextColor(RED); out.text = "Isi fee 0 sampai 25 (boleh desimal, mis. 2.5)."; return }
+        if (scope == "user" && email.isNullOrBlank()) { out.setTextColor(RED); out.text = "Isi email pengguna dulu."; return }
+        val body = JSONObject().put("scope", scope).put("fee_pct", f)
+        if (scope == "user") body.put("email", email!!.lowercase())
+        devCall("POST", "/app/dev/fee", body, out) { j -> "Tersimpan. " + feeSummary(j, a, b) }
     }
 
     private fun loadDevInfo(out: TextView) {
         val p = Cfg.prefs(this)
-        val key = p.getString("sec", "") ?: ""
+        val key = ownerKey()
         val base = Api.base(p.getString("wh", "") ?: "")
         if (key.isBlank() || base == null) {
             out.setTextColor(RED); out.text = "Isi alamat server dan Secret pemilik di Pengaturan > Server, lalu simpan."; return
