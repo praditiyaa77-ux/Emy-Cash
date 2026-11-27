@@ -37,3 +37,9 @@ Catatan: perubahan ini ditulis tanpa compiler lokal; bila build gagal, kirim log
 - **Edisi dev: Secret pemilik.** Tab Dev > "Buat atau buat ulang Secret" membuat Secret baru di server dan menyimpannya otomatis di app (kolom Secret di Pengaturan ikut terisi). Ketuk hasilnya untuk menyalin.
 - **Edisi dev: Telegram pemilik.** Isi bot token dan chat ID, lalu "Simpan dan aktifkan" dan "Kirim pesan tes". Dipakai untuk order langganan layanan.
 - Unduh: https://github.com/praditiyaa77-ux/Emy-Cash/releases/tag/latest
+
+## v1.3 (lanjutan): tampilan dan deteksi aplikasi
+- **Tampilan sama dengan web.** Dark bento: kartu membulat, tombol utama lime dengan bayangan keras, dock navigasi di bawah, logo Emy Cash di header. Palet ada di bagian atas `MainActivity.kt`.
+- **Package terisi otomatis.** App memindai aplikasi DANA, ShopeePay, dan GoPay yang terpasang lalu menambahkannya ke kolom Package (saat dibuka, dan lewat tombol "Deteksi aplikasi dompet otomatis"). Memakai `<queries>` di manifest, tanpa izin QUERY_ALL_PACKAGES.
+- **Ikon dan warna sesuai aplikasi.** Riwayat dan notifikasi memakai ikon asli aplikasinya dan warna merek: ShopeePay oranye, DANA biru, GoPay hijau. Judul notifikasi mengikuti bahasa aplikasinya (mis. "ShopeePay: pembayaran diterima Rp 10.000"). Bila aplikasinya tidak terpasang, dipakai lencana berwarna merek.
+- **Edisi dev.** Bagian Secret pemilik punya kolom alamat server dan Secret saat ini, serta pesan galat yang menjelaskan langkah berikutnya (HTTP 401/403/404/429). Ada bagian Fee (langganan, bawaan, per pengguna).
