@@ -78,6 +78,18 @@ object Cfg {
         return if (path.isEmpty()) noQuery.trimEnd('/') + "/notif" else u
     }
 
+    // Isi otomatis daftar package dengan aplikasi dompet yang terpasang di HP. true bila ada yang ditambahkan.
+    fun autoFill(c: Context): Boolean {
+        val found = Brand.installed(c).map { it.packageName }
+        if (found.isEmpty()) return false
+        val p = prefs(c)
+        val cur = (p.getString("pkgsx", "") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val add = found.filter { it !in cur }
+        if (add.isEmpty()) return false
+        p.edit().putString("pkgsx", (cur + add).joinToString(",")).apply()
+        return true
+    }
+
     fun monitored(c: Context, pkg: String): Boolean =
         pkgs(c).any { if (it.endsWith("*")) pkg.startsWith(it.dropLast(1)) else pkg == it }
 
@@ -219,7 +231,6 @@ class NotifService : NotificationListenerService() {
         val ref = o.optString("ref")
         val sub = o.optJSONObject("subscription")
         val at = ev.optLong("at", System.currentTimeMillis())
-        val title = "Permintaan bayar ${rupiah(total)}"
         val d = StringBuilder()
         d.append(name).append(", ").append(inv)
         if (sub != null) d.append(", paket ").append(sub.optString("plan_name"))
@@ -227,7 +238,8 @@ class NotifService : NotificationListenerService() {
         val time = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).format(Date(at))
         Cfg.addEntry(this, JSONObject().put("i", id).put("t", time).put("p", "emy.request")
             .put("ti", "Permintaan bayar $name").put("tx", d.toString()).put("am", total).put("st", "req").put("inv", inv))
-        postNotif(title, d.toString())
+        val pm = o.optString("method")
+        postNotif("$name: permintaan bayar ${rupiah(total)}", d.toString(), pm.ifEmpty { null })
         // Telegram dari server lebih utama; bila tidak aktif, pakai Telegram yang diatur di app ini
         if (!ev.optBoolean("telegram_sent")) {
             val m = StringBuilder("Permintaan bayar baru\nInvoice: $inv\nMerchant: $name\nNominal: ${rupiah(o.optLong("amount"))}")
@@ -304,7 +316,7 @@ class NotifService : NotificationListenerService() {
             val amt = parseAmount(title, text)
             if (!isMsg && amt != null && PAY_HINT.containsMatchIn("$title $text")) {
                 Cfg.addEntry(this, entry.put("am", amt).put("st", "unmon"))
-                postNotif("Notifikasi pembayaran belum dipantau", "$pkg · buka Emy Cash lalu tekan \"Pantau package ini\"")
+                postNotif("Notifikasi pembayaran belum dipantau", "$pkg, buka Emy Cash lalu tekan \"Pantau package ini\"", null, pkg)
             }
             return
         }
@@ -320,7 +332,7 @@ class NotifService : NotificationListenerService() {
         sendTelegram("[$pkg] $title\n$text")
         if (amount != null) {
             if (hook) sendWebhook(now, amount, method, pkg, title, text)
-            else postNotif("Kamu menerima saldo ${rupiah(amount)}", methodName(method))
+            else postNotif(Brand.receivedTitle(method, amount), "Tercatat di perangkat ini", method, pkg)
         }
     }
 
@@ -373,14 +385,14 @@ class NotifService : NotificationListenerService() {
             Cfg.updateEntry(ctx, id, status, inv, info)
             val name = methodName(method)
             when (status) {
-                "paid" -> postNotif("Kamu menerima saldo ${rupiah(amount)}", "$name · $inv · LUNAS")
-                "nomatch" -> postNotif("Saldo masuk ${rupiah(amount)}, tidak cocok order", "$name · cek manual di Emy Cash")
-                else -> postNotif("Saldo masuk ${rupiah(amount)}, gagal kirim ke server", "$name · $info")
+                "paid" -> postNotif(Brand.receivedTitle(method, amount), "LUNAS, invoice $inv", method, pkg)
+                "nomatch" -> postNotif(Brand.receivedTitle(method, amount), "Tidak cocok dengan order, cek manual di Emy Cash", method, pkg)
+                else -> postNotif(Brand.receivedTitle(method, amount), "Gagal kirim ke server: $info", method, pkg)
             }
         }.start()
     }
 
-    private fun postNotif(title: String, body: String) {
+    private fun postNotif(title: String, body: String, method: String? = null, pkg: String? = null) {
         try {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(
@@ -390,14 +402,20 @@ class NotifService : NotificationListenerService() {
                 this, 0, Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            val nt = Notification.Builder(this, Cfg.CHANNEL)
+            val nb = Notification.Builder(this, Cfg.CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_bell)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
-                .build()
+            // Notifikasi mengikuti aplikasinya: ikon asli, aksen warna merek (ShopeePay oranye, DANA biru, GoPay hijau), nama di subteks
+            val m = method?.takeIf { it.isNotEmpty() } ?: pkg?.let { Brand.methodOfPkg(it) }
+            if (m != null) {
+                nb.setColor(Brand.color(m)).setSubText(methodName(m))
+                nb.setLargeIcon(Brand.icon(this, pkg, m, 128))
+            }
+            val nt = nb.build()
             nm.notify((System.currentTimeMillis() % 1000000000L).toInt(), nt)
         } catch (e: Exception) {}
     }
