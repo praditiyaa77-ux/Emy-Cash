@@ -1,23 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Logo Emy Cash: tile lime dengan huruf E dan bayangan ungu -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,32c-9.4,0 -17,7.6 -17,17v9l-5,8h44l-5,-8v-9c0,-9.4 -7.6,-17 -17,-17z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M47,70a7,7 0,0 0,14 0z" />
-    <path
-        android:fillColor="#2FBF8F"
-        android:pathData="M70,36m-7,0a7,7 0,1 0,14 0a7,7 0,1 0,-14 0" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M66.5,36.2l2.8,2.8l4.7,-5.2" />
+    <path android:fillColor="#A58BFF" android:pathData="M45,35h30a4,4 0,0 1,4 4v30a4,4 0,0 1,-4 4h-30a4,4 0,0 1,-4 -4v-30a4,4 0,0 1,4 -4z" />
+    <path android:fillColor="#C8FF3E" android:pathData="M35,31h30a4,4 0,0 1,4 4v30a4,4 0,0 1,-4 4h-30a4,4 0,0 1,-4 -4v-30a4,4 0,0 1,4 -4z" />
+    <path android:fillColor="#0A0A0E" android:pathData="M42,38h5v28h-5z" />
+    <path android:fillColor="#0A0A0E" android:pathData="M42,38h18v5h-18z" />
+    <path android:fillColor="#0A0A0E" android:pathData="M42,49.5h15v5h-15z" />
+    <path android:fillColor="#0A0A0E" android:pathData="M42,61h18v5h-18z" />
 </vector>
